@@ -1595,6 +1595,41 @@ function Game() {
               }} />
             );
           }
+          if (e.kind === "electric") {
+            const bolts = 7;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - 50, top: e.y - 50, width: 100, height: 100, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(180,240,255,0.55) 0%, rgba(80,180,255,0.25) 45%, rgba(0,0,0,0) 70%)",
+                  boxShadow: `0 0 ${18 * fade}px rgba(160,230,255,0.9)`,
+                }} />
+                <svg viewBox="0 0 100 100" className="absolute inset-0" width="100" height="100">
+                  {Array.from({ length: bolts }).map((_, i) => {
+                    const ang = (i / bolts) * Math.PI * 2 + e.seed + t * 4;
+                    const len = 30 + ((e.seed * (i + 2)) % 18);
+                    const jx = 50 + Math.cos(ang) * len * 0.45 + Math.sin(t * 40 + i) * 7;
+                    const jy = 50 + Math.sin(ang) * len * 0.45 + Math.cos(t * 40 + i) * 7;
+                    const ex = 50 + Math.cos(ang) * len;
+                    const ey = 50 + Math.sin(ang) * len;
+                    const d = `M50 50 L${jx.toFixed(1)} ${jy.toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+                    return (
+                      <g key={i}>
+                        <path d={d} stroke="#bff5ff" strokeWidth={3.2} fill="none"
+                          strokeLinejoin="round" strokeLinecap="round"
+                          style={{ filter: `drop-shadow(0 0 ${4 * fade}px #6bd9ff) drop-shadow(0 0 ${8 * fade}px #2aa7ff)` }} />
+                        <path d={d} stroke="#ffffff" strokeWidth={1.2} fill="none"
+                          strokeLinejoin="round" strokeLinecap="round" />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
