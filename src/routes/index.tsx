@@ -419,6 +419,21 @@ function Game() {
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
+      // ===== Damage-over-time (Sukuna Dismantle bleed) =====
+      if (f.dots.length) {
+        for (const d of f.dots) {
+          d.timer -= dt;
+          if (d.timer <= 0 && d.ticksLeft > 0) {
+            d.timer += d.interval;
+            d.ticksLeft -= 1;
+            applyDamage(f, d.dmg, d.fromFacing, d.ownerUid, true);
+            playSound(SOUNDS.knife, 0.6);
+          }
+        }
+        f.dots = f.dots.filter((d) => d.ticksLeft > 0);
+      }
+
+
       const sandeMult = f.sandeActive > 0 ? 3 : 1;
 
       // Sandevistan afterimage trail - emit by distance (~1m = 50px) for true trail feel
