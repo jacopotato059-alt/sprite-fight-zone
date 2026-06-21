@@ -26,6 +26,10 @@ import sndKnife from "@/assets/sounds/knife-slash.mp3.asset.json";
 import sndSukunaTransform from "@/assets/sounds/sukuna-transform.mp3.asset.json";
 import sndDismantle1 from "@/assets/sounds/dismantle-1.mp3.asset.json";
 import sndDismantle2 from "@/assets/sounds/dismantle-2.mp3.asset.json";
+import dekuAsset from "@/assets/deku.png.asset.json";
+import sndCrackWhip from "@/assets/sounds/crack-the-whip.mp3.asset.json";
+import sndFinishingHit from "@/assets/sounds/finishing-hit.mp3.asset.json";
+import sndDetroitSmash from "@/assets/sounds/detroit-smash.mp3.asset.json";
 
 
 export const Route = createFileRoute("/")({
@@ -45,6 +49,7 @@ const SOUNDS = {
   taunt: sndTaunt.url, angry: sndAngry.url, chuckle: sndChuckle.url,
   divergent: sndDivergent.url, blackFlash: sndBlackFlash.url, knife: sndKnife.url,
   sukunaTransform: sndSukunaTransform.url, dismantle1: sndDismantle1.url, dismantle2: sndDismantle2.url,
+  crackWhip: sndCrackWhip.url, finishingHit: sndFinishingHit.url, detroitSmash: sndDetroitSmash.url,
 };
 
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
@@ -54,6 +59,9 @@ function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
     void a.play();
     return a;
   } catch { return null; }
+}
+function playPitched(url: string, volume = 0.6, rate = 1): HTMLAudioElement | null {
+  try { const a = new Audio(url); a.volume = volume; a.playbackRate = rate; void a.play(); return a; } catch { return null; }
 }
 function playSoundFade(url: string, holdMs: number, fadeMs: number, volume = 0.6) {
   const a = playSound(url, volume);
@@ -109,7 +117,7 @@ function playBoosted(url: string, gain = 8, stopAfterMs?: number) {
   else go();
 }
 
-type FighterTypeId = "dummy" | "david" | "yuji";
+type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 
@@ -149,6 +157,16 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     ],
     width: 64, height: 104,
   },
+  deku: {
+    id: "deku", name: "Deku", sprite: dekuAsset.url,
+    atk: 150, def: 350, speed: 1.2,
+    abilities: [
+      { name: "Black Whip", damage: 0, type: "status", cooldown: 6 },
+      { name: "Punch", damage: 8, type: "melee", cooldown: 15 },
+      { name: "Detroit Smash", damage: 56, type: "melee", cooldown: 45 },
+    ],
+    width: 64, height: 104,
+  },
 };
 
 // Sukuna-possessed form (Yuji below 50hp). Not a selectable slot.
@@ -179,7 +197,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
-  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack";
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "detroit";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
@@ -190,7 +208,7 @@ interface Fighter {
   shotsLeft: number; shotTimer: number; shotTarget?: number;
   // Yuji / Sukuna
   possessed: boolean;
-  windupKind?: "divergent" | "dismantle";
+  windupKind?: "divergent" | "dismantle" | "detroit";
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
@@ -204,6 +222,11 @@ interface Fighter {
   tauntCd: number;
   lastDodgedFrom?: number; // uid we just dodged - chance to taunt them
   lastTrickedFrom?: number;
+  // Deku
+  punchStacks?: number;
+  punchStackTimer?: number;
+  punchPitch?: number;
+  whip?: { targetUid: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; tipX?: number };
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
@@ -212,7 +235,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
@@ -451,6 +474,43 @@ function Game() {
         f.dots = f.dots.filter((d) => d.ticksLeft > 0);
       }
 
+      // ===== Deku punch-combo stack window =====
+      if ((f.punchStackTimer ?? 0) > 0) {
+        f.punchStackTimer = (f.punchStackTimer ?? 0) - dt;
+        if ((f.punchStackTimer ?? 0) <= 0 && (f.punchStacks ?? 0) > 0) {
+          f.punchStacks = 0;
+        }
+      }
+
+      // ===== Deku Black Whip update =====
+      if (f.whip) {
+        f.whip.t += dt;
+        const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
+        if (!target || f.whip.t >= 0.75) {
+          f.whip = undefined;
+        } else if (f.whip.phase === "extend") {
+          // Tip travels from deku toward target
+          const k = Math.min(1, f.whip.t / 0.3);
+          f.whip.tipX = f.x + (target.x - f.x) * k;
+          if (k >= 1) {
+            f.whip.phase = "drag";
+            f.whip.dragStartX = target.x;
+            target.stunned = Math.max(target.stunned, 1.0);
+            target.state = "hurt";
+            target.stateTimer = Math.max(target.stateTimer, 1.0);
+            target.vy = -160;
+            playSound(SOUNDS.crackWhip, 0.75);
+          }
+        } else if (f.whip.phase === "drag") {
+          const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
+          const anchorX = f.x + f.facing * (FIGHTERS[f.type].width * 0.75);
+          const startX = f.whip.dragStartX ?? target.x;
+          target.x = startX + (anchorX - startX) * dragT;
+          target.vx = 0;
+          f.whip.tipX = target.x;
+        }
+      }
+
       // ===== Stun lockout — skip AI/movement while stunned =====
       if (f.stunned > 0 && f.state !== "lunge" && f.state !== "windup") {
         f.vx *= 0.7;
@@ -497,6 +557,22 @@ function Game() {
               } else if (f.lungeKind === "divergent") {
                 playSound(SOUNDS.divergent, 0.85);
                 spawnEffect("bluefire", hitX, hitY);
+              } else if (f.lungeKind === "detroit") {
+                playSound(SOUNDS.divergent, 1.0);
+                spawnEffect("bluefire", hitX, hitY, 0.6);
+                spawnEffect("counterburst", hitX, hitY, 0.6);
+                t2.vx = f.facing * 1400; t2.vy = -640;
+                t2.stunned = Math.max(t2.stunned, 0.6);
+              } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal") {
+                playPitched(SOUNDS.punchHit, 0.75, f.punchPitch ?? 1);
+                spawnEffect("greenfire", hitX, hitY, 0.45);
+                if (f.lungeKind === "dekuFinal") {
+                  playSound(SOUNDS.finishingHit, 0.9);
+                  spawnEffect("greenfire", hitX + 14, hitY - 10, 0.55);
+                  spawnEffect("greenfire", hitX - 12, hitY + 6, 0.55);
+                  spawnEffect("counterburst", hitX, hitY, 0.5);
+                  t2.vx = f.facing * 980; t2.vy = -520;
+                }
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
@@ -552,6 +628,19 @@ function Game() {
             });
             playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
             f.state = "throw"; f.stateTimer = 0.2;
+          } else if (f.windupKind === "detroit") {
+            // Air freeze ended — dive at nearest enemy with massive force
+            const tgt = nearestEnemy(f, fighters);
+            const distT = tgt ? Math.abs(tgt.x - f.x) : LUNGE_DISTANCE;
+            const dir = tgt ? ((Math.sign(tgt.x - f.x) || f.facing) as 1 | -1) : f.facing;
+            f.facing = dir;
+            f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+            f.lungeFromX = f.x;
+            f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE * 1.6, distT + 80);
+            f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+            f.lungeDamage = 56;
+            f.lungeKind = "detroit";
+            f.vy = 1400; // dive bomb downward toward target
           } else {
             f.state = "idle";
           }
@@ -781,6 +870,53 @@ function Game() {
                 continue;
               }
             }
+          } else if (f.type === "deku") {
+            // Detroit Smash (idx 2): air-only finisher
+            if (tryUse(2) && !f.onGround && f.y < groundY - 140 && dist < w * 0.95) {
+              f.state = "windup"; f.stateTimer = 2.0;
+              f.windupKind = "detroit"; f.windupGrow = 0;
+              f.vx = 0; f.vy = 0;
+              f.abilityCd[2] = 45; f.globalCd = 0.6;
+              playSound(SOUNDS.detroitSmash, 0.9);
+              triggerReaction(f, "angry");
+              continue;
+            }
+            // Tactical jump if Detroit Smash is ready & we're grounded
+            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2 && Math.random() < 0.04) {
+              f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.8; f.jumpsLeft = 1;
+            }
+            // Black Whip (idx 0): pull enemy in to set up combo
+            if (tryUse(0) && !f.whip && dist > MELEE_RANGE * 1.1 && dist < w * 0.85) {
+              f.state = "throw"; f.stateTimer = 0.75; f.vx = 0;
+              f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.abilityCd[0] = 6; f.globalCd = 0.4;
+              playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              continue;
+            }
+            // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
+            if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
+              const stack = f.punchStacks ?? 0;
+              const base = 8;
+              const dmg = stack === 0 ? base : stack === 1 ? Math.round(base * 1.2) : Math.round(base * 1.2 * 1.6);
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = dmg;
+              f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
+              f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              if (stack >= 2) {
+                f.punchStacks = 0; f.punchStackTimer = 0;
+                f.abilityCd[1] = 15;
+              } else {
+                f.punchStacks = stack + 1;
+                f.punchStackTimer = 2.0;
+                f.abilityCd[1] = 0.8;
+              }
+              f.globalCd = 0.18;
+              playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
+              continue;
+            }
           } else {
             // Dummy abilities
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
@@ -912,7 +1048,11 @@ function Game() {
       }
 
       // ===== Physics =====
-      f.vy += GRAVITY * dt;
+      if (f.state === "windup" && f.windupKind === "detroit") {
+        f.vy = 0; f.vx = 0; // frozen mid-air during Detroit Smash charge
+      } else {
+        f.vy += GRAVITY * dt;
+      }
       if (f.state !== "lunge") f.x += f.vx * dt;
       f.y += f.vy * dt;
 
@@ -1427,6 +1567,19 @@ function Game() {
               }} />
             );
           }
+          if (e.kind === "greenfire") {
+            const size = 36 + t * 64;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(220,255,230,0.95) 0%, rgba(80,255,160,0.85) 30%, rgba(20,200,140,0.55) 60%, rgba(0,80,40,0) 78%)",
+                boxShadow: `0 0 ${16 * fade}px rgba(80,255,160,0.95), 0 0 ${30 * fade}px rgba(30,200,140,0.75)`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
@@ -1482,6 +1635,49 @@ function Game() {
             </div>
           );
         })}
+
+        {/* Deku Black Whip ropes */}
+        {fightersRef.current.filter((f) => f.whip).map((f) => {
+          const def = FIGHTERS[f.type];
+          const w = f.whip!;
+          const srcX = f.x;
+          const srcY = w.sourceY;
+          const tipX = w.tipX ?? srcX;
+          const target = fightersRef.current.find((o) => o.uid === w.targetUid);
+          const tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : srcY;
+          const dx = tipX - srcX; const dy = tipY - srcY;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          const fade = Math.max(0, 1 - w.t / 0.75);
+          return (
+            <div key={`whip-${f.uid}`} className="absolute pointer-events-none" style={{ left: srcX, top: srcY, opacity: fade }}>
+              {/* main rope */}
+              <div style={{
+                position: "absolute", left: 0, top: -3,
+                width: len, height: 6,
+                background: "linear-gradient(180deg, #000 0%, #000 35%, #1a1a1a 50%, #000 65%, #000 100%)",
+                border: "1px solid #3affc5",
+                boxShadow: "0 0 6px #3affc5, 0 0 12px rgba(58,255,197,0.5)",
+                transform: `rotate(${angle}deg)`,
+                transformOrigin: "0 50%",
+                borderRadius: 2,
+              }} />
+              {/* side rope wisps during initial pop (first 0.18s) */}
+              {w.t < 0.18 && [-1, 1].map((s) => (
+                <div key={s} style={{
+                  position: "absolute",
+                  left: s * (def.width * 0.45),
+                  top: -10 - (w.t / 0.18) * 12,
+                  width: 4, height: 18 + (w.t / 0.18) * 14,
+                  background: "#000",
+                  border: "1px solid #3affc5",
+                  boxShadow: "0 0 4px #3affc5",
+                  borderRadius: 2,
+                }} />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
 
@@ -1500,7 +1696,7 @@ function Game() {
 
             {!showStats ? (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <SlotCard selected={selectedSlot === "dummy"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("dummy"); }}
                     sprite={FIGHTERS.dummy.sprite} name="Dummy" />
@@ -1510,6 +1706,9 @@ function Game() {
                   <SlotCard selected={selectedSlot === "yuji"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("yuji"); }}
                     sprite={FIGHTERS.yuji.sprite} name="Yuji Itadori" />
+                  <SlotCard selected={selectedSlot === "deku"}
+                    onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("deku"); }}
+                    sprite={FIGHTERS.deku.sprite} name="Deku" />
                 </div>
 
 
