@@ -1,11 +1,11 @@
 {
-  "version": 1,
   "asset_id": "426b80fe-6c63-47f6-a1aa-9b8ec24f8427",
-  "project_id": "aca14de8-474d-4bc5-9aa5-139760c38cb1",
-  "url": "/__l5e/assets-v1/426b80fe-6c63-47f6-a1aa-9b8ec24f8427/david.png",
-  "r2_key": "a/v1/aca14de8-474d-4bc5-9aa5-139760c38cb1/426b80fe-6c63-47f6-a1aa-9b8ec24f8427/david.png",
-  "original_filename": "david.png",
-  "size": 157766,
   "content_type": "image/png",
-  "created_at": "2026-06-21T03:56:44Z"
+  "created_at": "2026-06-21T03:56:44Z",
+  "original_filename": "david.png",
+  "project_id": "d803d39d-6970-4fa0-a1cc-a166369ce959",
+  "r2_key": "a/v1/d803d39d-6970-4fa0-a1cc-a166369ce959/426b80fe-6c63-47f6-a1aa-9b8ec24f8427/david.png",
+  "size": 157766,
+  "url": "/__l5e/assets-v1/426b80fe-6c63-47f6-a1aa-9b8ec24f8427/david.png",
+  "version": 1
 }

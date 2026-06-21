@@ -1,11 +1,11 @@
 {
-  "version": 1,
   "asset_id": "dc02ca24-4431-4bdd-ab61-e9cde8090b9f",
-  "project_id": "aca14de8-474d-4bc5-9aa5-139760c38cb1",
-  "url": "/__l5e/assets-v1/dc02ca24-4431-4bdd-ab61-e9cde8090b9f/gun.png",
-  "r2_key": "a/v1/aca14de8-474d-4bc5-9aa5-139760c38cb1/dc02ca24-4431-4bdd-ab61-e9cde8090b9f/gun.png",
-  "original_filename": "gun.png",
-  "size": 1552,
   "content_type": "image/png",
-  "created_at": "2026-06-21T03:56:44Z"
+  "created_at": "2026-06-21T03:56:44Z",
+  "original_filename": "gun.png",
+  "project_id": "d803d39d-6970-4fa0-a1cc-a166369ce959",
+  "r2_key": "a/v1/d803d39d-6970-4fa0-a1cc-a166369ce959/dc02ca24-4431-4bdd-ab61-e9cde8090b9f/gun.png",
+  "size": 1552,
+  "url": "/__l5e/assets-v1/dc02ca24-4431-4bdd-ab61-e9cde8090b9f/gun.png",
+  "version": 1
 }
