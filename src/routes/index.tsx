@@ -290,7 +290,9 @@ function Game() {
       reactionDelay: 0.12 + Math.random() * 0.18,
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
+      possessed: false, windupGrow: 0, dots: [],
       tauntCd: 1 + Math.random() * 2,
+
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
