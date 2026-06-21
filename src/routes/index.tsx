@@ -235,7 +235,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
