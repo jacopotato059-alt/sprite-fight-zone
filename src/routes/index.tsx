@@ -225,6 +225,7 @@ const LUNGE_DISTANCE = 220;
 const LUNGE_DURATION = 0.22;
 const PROJECTILE_SPEED = 540;
 const BULLET_SPEED = 900;
+const DISMANTLE_SPEED = 1050; // fast linear piercing slash
 const PUSH_RADIUS = 48; // anti-overlap separation
 
 let __uid = 1;
