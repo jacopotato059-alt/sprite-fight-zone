@@ -30,6 +30,7 @@ import dekuAsset from "@/assets/deku.png.asset.json";
 import sndCrackWhip from "@/assets/sounds/crack-the-whip.mp3.asset.json";
 import sndFinishingHit from "@/assets/sounds/finishing-hit.mp3.asset.json";
 import sndDetroitSmash from "@/assets/sounds/detroit-smash.mp3.asset.json";
+import sndElectric from "@/assets/sounds/electricity.mp3.asset.json";
 
 
 export const Route = createFileRoute("/")({
@@ -50,6 +51,7 @@ const SOUNDS = {
   divergent: sndDivergent.url, blackFlash: sndBlackFlash.url, knife: sndKnife.url,
   sukunaTransform: sndSukunaTransform.url, dismantle1: sndDismantle1.url, dismantle2: sndDismantle2.url,
   crackWhip: sndCrackWhip.url, finishingHit: sndFinishingHit.url, detroitSmash: sndDetroitSmash.url,
+  electric: sndElectric.url,
 };
 
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
@@ -226,6 +228,8 @@ interface Fighter {
   punchStacks?: number;
   punchStackTimer?: number;
   punchPitch?: number;
+  punchHitStack?: number;
+  aerialIntent?: number;
   whip?: { targetUid: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; tipX?: number };
 }
 interface Projectile {
@@ -235,7 +239,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
@@ -561,15 +565,24 @@ function Game() {
                 playSound(SOUNDS.divergent, 1.0);
                 spawnEffect("bluefire", hitX, hitY, 0.6);
                 spawnEffect("counterburst", hitX, hitY, 0.6);
+                spawnEffect("electric", hitX, hitY, 0.6);
+                playSound(SOUNDS.electric, 0.7);
                 t2.vx = f.facing * 1400; t2.vy = -640;
                 t2.stunned = Math.max(t2.stunned, 0.6);
               } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal") {
                 playPitched(SOUNDS.punchHit, 0.75, f.punchPitch ?? 1);
                 spawnEffect("greenfire", hitX, hitY, 0.45);
+                spawnEffect("electric", hitX, hitY, 0.35);
+                playSound(SOUNDS.electric, 0.45);
+                // 2nd-hit background layer = the 1st (lunge) sound
+                if ((f.punchHitStack ?? 0) === 1) {
+                  playSound(SOUNDS.punchLunge, 0.7);
+                }
                 if (f.lungeKind === "dekuFinal") {
                   playSound(SOUNDS.finishingHit, 0.9);
                   spawnEffect("greenfire", hitX + 14, hitY - 10, 0.55);
                   spawnEffect("greenfire", hitX - 12, hitY + 6, 0.55);
+                  spawnEffect("electric", hitX, hitY, 0.55);
                   spawnEffect("counterburst", hitX, hitY, 0.5);
                   t2.vx = f.facing * 980; t2.vy = -520;
                 }
@@ -839,6 +852,41 @@ function Game() {
                 f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
               }
+              // ===== Aerial combat: wall-run + backflip to dive bomb =====
+              if (f.aerialIntent === undefined) f.aerialIntent = 0;
+              f.aerialIntent = Math.max(0, f.aerialIntent - dt);
+              const wantsAerial = f.onGround && f.aerialIntent <= 0 && f.jumpCd <= 0
+                && (f.intent === "bait" || f.intent === "space" || hpRatio < 0.45)
+                && dist > MELEE_RANGE * 1.2
+                && Math.random() < 0.025;
+              if (wantsAerial) f.aerialIntent = 2.2;
+              if ((f.aerialIntent ?? 0) > 0 && f.onGround) {
+                // Sprint to the closer wall, then backflip toward enemy
+                const wallDir: 1 | -1 = (f.x < w / 2 ? -1 : 1);
+                f.facing = -wallDir as 1 | -1; // keep facing the enemy side
+                f.vx = wallDir * WALK_SPEED_BASE * def.speed * 1.5;
+                f.state = "walk"; f.walkPhase += dt * 16;
+                const atWall = (wallDir === -1 && f.x < 70) || (wallDir === 1 && f.x > w - 70);
+                if (atWall) {
+                  // Backflip: spring off the wall toward the enemy
+                  f.vy = HIGH_JUMP_VELOCITY * 0.95;
+                  f.vx = -wallDir * MAX_AIR_SPEED * 1.5;
+                  f.jumpCd = 0.7; f.jumpsLeft = 1;
+                  f.aerialIntent = 0;
+                  f.bounce = 0.35;
+                  triggerReaction(f, "chuckle");
+                  playSound(SOUNDS.punchLunge, 0.45);
+                }
+                continue;
+              }
+              // Air-to-ground Divergent dive when descending near enemy
+              if (!f.onGround && tryUse(0) && Math.abs(dx) < LUNGE_DISTANCE * 1.3 && f.vy > -120) {
+                f.state = "windup"; f.stateTimer = 0.1;
+                f.windupKind = "divergent"; f.windupGrow = 0;
+                f.pendingBlack = Math.random() < 0.3;
+                f.abilityCd[0] = 3; f.globalCd = 0.3;
+                continue;
+              }
             } else {
               // Sukuna — kite at mid-range: if enemy is right on top, prefer space
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
@@ -891,6 +939,8 @@ function Game() {
               f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
               f.abilityCd[0] = 6; f.globalCd = 0.4;
               playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              playSound(SOUNDS.electric, 0.5);
+              spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
             // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
@@ -905,6 +955,7 @@ function Game() {
               f.lungeDamage = dmg;
               f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
               f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              f.punchHitStack = stack;
               if (stack >= 2) {
                 f.punchStacks = 0; f.punchStackTimer = 0;
                 f.abilityCd[1] = 15;
@@ -1446,6 +1497,37 @@ function Game() {
                 </div>
               )}
 
+              {/* Deku ambient electric sparks — intensifies with combo stacks / windups */}
+              {f.type === "deku" && (() => {
+                const stacks = f.punchStacks ?? 0;
+                const charged = stacks > 0 || !!f.whip || (f.state === "windup" && f.windupKind === "detroit");
+                const count = charged ? 8 + stacks * 2 : 4;
+                const intensity = charged ? 1 : 0.5;
+                return (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {Array.from({ length: count }).map((_, i) => {
+                      const ang = (i / count) * Math.PI * 2 + timeRef.current * (2 + stacks);
+                      const r = 22 + Math.sin(timeRef.current * 9 + i * 1.7) * 8;
+                      const px = 50 + Math.cos(ang) * r;
+                      const py = 55 + Math.sin(ang) * r * 0.85;
+                      const flick = (Math.sin(timeRef.current * 22 + i * 3) + 1) * 0.5;
+                      return (
+                        <div key={i} className="absolute" style={{
+                          left: `${px}%`, top: `${py}%`,
+                          width: 3, height: 3, borderRadius: "50%",
+                          background: "#bff5ff",
+                          boxShadow: `0 0 ${4 + flick * 6}px #6bd9ff, 0 0 ${8 + flick * 10}px rgba(58,255,197,${0.5 * intensity})`,
+                          opacity: 0.6 + flick * 0.4 * intensity,
+                          transform: "translate(-50%,-50%)",
+                        }} />
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+
+
 
               {/* Gun for David - sits on the side, mirrored opposite */}
               {showGun && (
@@ -1578,6 +1660,41 @@ function Game() {
                 boxShadow: `0 0 ${16 * fade}px rgba(80,255,160,0.95), 0 0 ${30 * fade}px rgba(30,200,140,0.75)`,
                 mixBlendMode: "screen",
               }} />
+            );
+          }
+          if (e.kind === "electric") {
+            const bolts = 7;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - 50, top: e.y - 50, width: 100, height: 100, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(180,240,255,0.55) 0%, rgba(80,180,255,0.25) 45%, rgba(0,0,0,0) 70%)",
+                  boxShadow: `0 0 ${18 * fade}px rgba(160,230,255,0.9)`,
+                }} />
+                <svg viewBox="0 0 100 100" className="absolute inset-0" width="100" height="100">
+                  {Array.from({ length: bolts }).map((_, i) => {
+                    const ang = (i / bolts) * Math.PI * 2 + e.seed + t * 4;
+                    const len = 30 + ((e.seed * (i + 2)) % 18);
+                    const jx = 50 + Math.cos(ang) * len * 0.45 + Math.sin(t * 40 + i) * 7;
+                    const jy = 50 + Math.sin(ang) * len * 0.45 + Math.cos(t * 40 + i) * 7;
+                    const ex = 50 + Math.cos(ang) * len;
+                    const ey = 50 + Math.sin(ang) * len;
+                    const d = `M50 50 L${jx.toFixed(1)} ${jy.toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+                    return (
+                      <g key={i}>
+                        <path d={d} stroke="#bff5ff" strokeWidth={3.2} fill="none"
+                          strokeLinejoin="round" strokeLinecap="round"
+                          style={{ filter: `drop-shadow(0 0 ${4 * fade}px #6bd9ff) drop-shadow(0 0 ${8 * fade}px #2aa7ff)` }} />
+                        <path d={d} stroke="#ffffff" strokeWidth={1.2} fill="none"
+                          strokeLinejoin="round" strokeLinecap="round" />
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
             );
           }
           const bolts = 5;
