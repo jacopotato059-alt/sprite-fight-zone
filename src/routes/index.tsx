@@ -1102,6 +1102,16 @@ function Game() {
                 border: "1px solid #000",
                 boxShadow: "0 0 6px #ffb347",
               }} />
+          ) : p.kind === "dismantle" ? (
+            <img key={p.uid} src={dismantleAsset.url} alt="" draggable={false}
+              className="absolute pointer-events-none"
+              style={{
+                left: p.x - 26, top: p.y - 40,
+                width: 52, height: 80,
+                imageRendering: "pixelated", objectFit: "contain",
+                transform: `scaleX(${Math.sign(p.vx) || 1})`,
+                filter: "drop-shadow(0 0 6px rgba(180,30,40,0.8)) brightness(0.95)",
+              }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
               style={{
@@ -1111,7 +1121,60 @@ function Game() {
               }} />
           )
         ))}
+
+        {/* Hit effects layer (above fighters) */}
+        {effectsRef.current.map((e) => {
+          const t = 1 - e.life / e.maxLife; // 0..1 progress
+          const fade = e.life / e.maxLife;   // 1..0
+          if (e.kind === "bluefire") {
+            const size = 40 + t * 60;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(120,200,255,0.9) 35%, rgba(40,140,255,0.6) 60%, rgba(20,80,220,0) 75%)",
+                boxShadow: `0 0 ${18 * fade}px rgba(90,200,255,0.9), 0 0 ${30 * fade}px rgba(40,140,255,0.7)`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
+          // Black Flash: animated black lightning bolts with glowing red outline
+          const bolts = 5;
+          return (
+            <div key={e.uid} className="absolute pointer-events-none" style={{
+              left: e.x - 60, top: e.y - 60, width: 120, height: 120, opacity: fade,
+            }}>
+              <div className="absolute inset-0" style={{
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(255,40,60,0.45) 0%, rgba(120,0,20,0.25) 45%, rgba(0,0,0,0) 70%)",
+                boxShadow: `0 0 ${24 * fade}px rgba(255,30,50,0.9)`,
+              }} />
+              <svg viewBox="0 0 120 120" className="absolute inset-0" width="120" height="120">
+                {Array.from({ length: bolts }).map((_, i) => {
+                  const ang = (i / bolts) * Math.PI * 2 + e.seed + t * 6;
+                  const len = 50 + ((e.seed * (i + 1)) % 18);
+                  const mx = 60 + Math.cos(ang) * len * 0.5 + Math.sin(t * 30 + i) * 6;
+                  const my = 60 + Math.sin(ang) * len * 0.5 + Math.cos(t * 30 + i) * 6;
+                  const ex = 60 + Math.cos(ang) * len;
+                  const ey = 60 + Math.sin(ang) * len;
+                  const d = `M60 60 L${mx.toFixed(1)} ${my.toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+                  return (
+                    <g key={i}>
+                      <path d={d} stroke="#ff1f3a" strokeWidth={5} fill="none"
+                        strokeLinejoin="round" strokeLinecap="round"
+                        style={{ filter: `drop-shadow(0 0 ${5 * fade}px #ff2540) drop-shadow(0 0 ${9 * fade}px #ff0030)` }} />
+                      <path d={d} stroke="#0a0a0a" strokeWidth={2.4} fill="none"
+                        strokeLinejoin="round" strokeLinecap="round" />
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          );
+        })}
       </div>
+
 
       {showFighters && (
         <div className="absolute inset-0 z-20 flex items-center justify-center" onClick={() => { playSound(SOUNDS.click, 0.4); setShowFighters(false); setShowStats(false); }}>
