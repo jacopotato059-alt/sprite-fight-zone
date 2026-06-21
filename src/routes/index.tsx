@@ -256,10 +256,12 @@ function Game() {
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
   const [showStats, setShowStats] = useState(false);
+  const [debugAi, setDebugAi] = useState(false);
   const [, forceTick] = useState(0);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
+  const damageNumsRef = useRef<{ uid: number; x: number; y: number; vy: number; life: number; maxLife: number; dmg: number; crit: boolean }[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
@@ -315,6 +317,7 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    damageNumsRef.current = [];
     playSound(SOUNDS.click, 0.5);
   }, []);
 
@@ -564,10 +567,20 @@ function Game() {
             f.shotTimer = 0.12;
             f.shotsLeft -= 1;
             const dir = f.facing;
+            // Aim at stored target Y with small spread (tightened)
+            const muzzleY = f.y - def.height * 0.55;
+            const tgtY = f.shotTarget ?? muzzleY;
+            const dyAim = tgtY - muzzleY;
+            // Time-to-target estimate to leading vy properly
+            const enemyForLead = nearestEnemy(f, fightersRef.current);
+            const tof = enemyForLead ? Math.abs(enemyForLead.x - f.x) / BULLET_SPEED : 0.3;
+            const leadY = enemyForLead ? enemyForLead.vy * tof * 0.8 : 0;
+            const aimVy = (dyAim + leadY) / Math.max(0.08, tof);
+            const spread = (Math.random() - 0.5) * 12; // much tighter
             projectilesRef.current.push({
               uid: nextUid(), ownerUid: f.uid, kind: "bullet",
-              x: f.x + dir * 30, y: f.y - def.height * 0.55,
-              vx: dir * BULLET_SPEED, vy: -10 + (Math.random() - 0.5) * 30,
+              x: f.x + dir * 30, y: muzzleY,
+              vx: dir * BULLET_SPEED, vy: aimVy + spread,
               damage: 34, ttl: 1.2,
             });
             playSound(SOUNDS.pistol, 0.5);
@@ -672,10 +685,12 @@ function Game() {
               startSande(f, 3, "full");
               f.abilityCd[0] = 12; f.globalCd = 0.3;
             }
-            // Shots Fired ranged
-            else if (tryUse(1) && dist > MELEE_RANGE * 1.1 && dist < w * 0.95) {
+            // Shots Fired ranged — only at a safe distance, aim at enemy center
+            else if (tryUse(1) && dist > MELEE_RANGE * 1.4 && dist < w * 0.95) {
+              const edef = FIGHTERS[enemy.type];
               f.state = "shoot"; f.stateTimer = 0.55;
               f.shotsLeft = 3; f.shotTimer = 0;
+              f.shotTarget = enemy.y - edef.height * 0.55;
               f.abilityCd[1] = 5; f.globalCd = 0.5;
               continue;
             }
@@ -714,12 +729,13 @@ function Game() {
                   }
                 }
               }
-              // ===== Counter Strike: pop the stance when pressured (lunge incoming or close) =====
-              if (tryUse(1) && f.counterActive <= 0 && (
-                (enemy.state === "lunge" && dist < LUNGE_DISTANCE) ||
-                (dist < MELEE_RANGE * 1.6 && Math.random() < 0.5) ||
-                (f.hp / f.maxHp < 0.5 && Math.random() < 0.4)
-              )) {
+              // ===== Counter Strike: only when about to be hit (smarter, less spammy) =====
+              const aboutToBeHit =
+                (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.85) ||
+                (enemy.state === "windup" && dist < LUNGE_DISTANCE) ||
+                (enemy.state === "shoot" && dist < 360) ||
+                (enemy.state === "throw" && dist < 320);
+              if (tryUse(1) && f.counterActive <= 0 && (aboutToBeHit || (f.hp / f.maxHp < 0.35 && dist < MELEE_RANGE * 2 && Math.random() < 0.5))) {
                 f.counterActive = 2.2;
                 f.abilityCd[1] = 5; f.globalCd = 0.2;
                 triggerReaction(f, "angry");
@@ -735,20 +751,23 @@ function Game() {
                 continue;
               }
             } else {
-              // Sukuna — Clash: quick basic projectile, 2s CD
+              // Sukuna — kite at mid-range: if enemy is right on top, prefer space
+              if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
               const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
-              if (tryUse(1) && dist > MELEE_RANGE * 0.5 && dist < w * 0.9) {
+              // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
+              if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
                 f.state = "throw"; f.stateTimer = 0.18;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                const lead = Math.sign(enemy.vx) * Math.min(50, Math.abs(enemy.vx) * 0.12);
+                // Lead the target — better aim
+                const lead = enemy.vx * 0.18;
                 projectilesRef.current.push({
                   uid: nextUid(), ownerUid: f.uid, kind: "clash",
                   x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                  vx: dir * (PROJECTILE_SPEED * 1.3) + lead, vy: 0,
-                  damage: 15, ttl: 1.6,
+                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 0,
+                  damage: 18, ttl: 1.4,
                 });
-                f.abilityCd[1] = 2; f.globalCd = 0.25;
+                f.abilityCd[1] = 2.5; f.globalCd = 0.3;
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
@@ -961,20 +980,43 @@ function Game() {
       effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
     }
 
+    // ===== Damage number floats =====
+    if (damageNumsRef.current.length) {
+      for (const n of damageNumsRef.current) {
+        n.life -= dt;
+        n.y += n.vy * dt;
+        n.vy += 60 * dt; // soften upward rise
+      }
+      damageNumsRef.current = damageNumsRef.current.filter((n) => n.life > 0);
+    }
+
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
 
 
   const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
-    target.hp -= dmg;
+    // Critical hit: 12% chance on non-dot for +50% dmg
+    const crit = !isDot && Math.random() < 0.12;
+    const finalDmg = crit ? Math.round(dmg * 1.5) : dmg;
+    target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
       target.bounce = 0.3;
-      target.vx = fromFacing * 260;
-      target.vy = -300;
+      target.vx = fromFacing * (crit ? 360 : 260);
+      target.vy = crit ? -360 : -300;
       target.state = "hurt";
-      target.stateTimer = 0.32;
+      target.stateTimer = crit ? 0.42 : 0.32;
     }
+    // Floating damage number
+    const tdef = FIGHTERS[target.type];
+    damageNumsRef.current.push({
+      uid: nextUid(),
+      x: target.x + (Math.random() - 0.5) * 16,
+      y: target.y - tdef.height * 0.9,
+      vy: isDot ? -28 : -70,
+      life: isDot ? 0.55 : 0.85, maxLife: isDot ? 0.55 : 0.85,
+      dmg: finalDmg, crit,
+    });
 
     // ===== Yuji Counter Strike trigger =====
     if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
@@ -1075,6 +1117,9 @@ function Game() {
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
       <div className="absolute top-4 right-4 z-30 flex gap-3">
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
+          {debugAi ? "Debug: ON" : "Debug: OFF"}
+        </button>
         <button className="mc-btn danger" onClick={restart}>Restart</button>
       </div>
 
@@ -1167,7 +1212,44 @@ function Game() {
                     transition: "width 120ms linear",
                   }} />
                 </div>
+                {/* Cooldown pips */}
+                {(() => {
+                  const slots = possessed
+                    ? [{ name: "Dismantle", cd: f.abilityCd[0] ?? 0, max: 15, color: "#ff5a6e" }, { name: "Clash", cd: f.abilityCd[1] ?? 0, max: 2.5, color: "#ffb04a" }]
+                    : def.abilities.map((a, i) => ({ name: a.name, cd: f.abilityCd[i] ?? 0, max: a.cooldown, color: ["#4ec1ff", "#ffb04a", "#b884ff"][i] || "#aaa" }));
+                  return (
+                    <div className="flex gap-1 justify-center mt-1" style={{ width: 96, marginLeft: "auto", marginRight: "auto" }}>
+                      {slots.map((s, i) => {
+                        const ready = s.cd <= 0.001;
+                        const pct = ready ? 1 : 1 - s.cd / s.max;
+                        return (
+                          <div key={i} title={s.name} className="relative" style={{
+                            flex: 1, height: 4,
+                            background: "rgba(0,0,0,0.65)",
+                            border: "1px solid #000",
+                            boxShadow: ready ? `0 0 4px ${s.color}` : "none",
+                          }}>
+                            <div style={{
+                              width: `${pct * 100}%`, height: "100%",
+                              background: ready ? s.color : `${s.color}88`,
+                              transition: "width 80ms linear",
+                            }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {debugAi && (
+                  <div style={{ fontFamily: "Chakra Petch", fontSize: 7, color: "#9be0ff", textShadow: "1px 1px 0 #000", marginTop: 2, lineHeight: 1.1 }}>
+                    {f.intent} | {f.state}{f.stunned > 0 ? " | STUN" : ""}{f.counterActive > 0 ? " | CTR" : ""}{f.sandeActive > 0 ? " | SAND" : ""}
+                    <div style={{ color: "#ffd16e" }}>
+                      gcd {f.globalCd.toFixed(1)} | tgt {f.tauntedBy ?? "-"}
+                    </div>
+                  </div>
+                )}
               </div>
+
 
               {/* Reaction icon */}
               {f.reactionIcon && (
@@ -1378,7 +1460,30 @@ function Game() {
             </div>
           );
         })}
+
+        {/* Floating damage numbers */}
+        {damageNumsRef.current.map((n) => {
+          const fade = Math.min(1, n.life / n.maxLife);
+          const size = n.crit ? 18 : 12;
+          return (
+            <div key={n.uid} className="absolute pointer-events-none" style={{
+              left: n.x, top: n.y,
+              transform: `translate(-50%,-50%) scale(${n.crit ? 1 + (1 - fade) * 0.3 : 1})`,
+              fontFamily: "Chakra Petch", fontWeight: 800,
+              fontSize: size,
+              color: n.crit ? "#fff35a" : "#fff",
+              textShadow: n.crit
+                ? "0 0 6px #ff5a3a, 1px 1px 0 #000, -1px -1px 0 #000"
+                : "1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000",
+              opacity: fade,
+              whiteSpace: "nowrap",
+            }}>
+              {n.crit ? `${n.dmg}!` : n.dmg}
+            </div>
+          );
+        })}
       </div>
+
 
 
       {showFighters && (
