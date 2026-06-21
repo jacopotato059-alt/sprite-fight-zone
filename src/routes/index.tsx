@@ -735,13 +735,30 @@ function Game() {
                 continue;
               }
             } else {
-              // Sukuna — Dismantle: linear, fast, piercing slash
-              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+              // Sukuna — Clash: quick basic projectile, 2s CD
+              const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
+              if (tryUse(1) && dist > MELEE_RANGE * 0.5 && dist < w * 0.9) {
+                f.state = "throw"; f.stateTimer = 0.18;
+                const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = dir; f.vx = 0;
+                const lead = Math.sign(enemy.vx) * Math.min(50, Math.abs(enemy.vx) * 0.12);
+                projectilesRef.current.push({
+                  uid: nextUid(), ownerUid: f.uid, kind: "clash",
+                  x: f.x + dir * 28, y: f.y - def.height * 0.55,
+                  vx: dir * (PROJECTILE_SPEED * 1.3) + lead, vy: 0,
+                  damage: 15, ttl: 1.6,
+                });
+                f.abilityCd[1] = 2; f.globalCd = 0.25;
+                playSound(SOUNDS.throwSwing, 0.5);
+                continue;
+              }
+              // Sukuna — Dismantle: linear, fast, piercing slash (save it — long CD)
+              if (tryUse(0) && !enemyBleeding && dist > MELEE_RANGE * 0.6 && dist < w * 0.95) {
                 f.state = "windup"; f.stateTimer = 0.16;
                 f.windupKind = "dismantle"; f.windupGrow = 0;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                f.abilityCd[0] = 4; f.globalCd = 0.4;
+                f.abilityCd[0] = 15; f.globalCd = 0.4;
                 continue;
               }
             }
