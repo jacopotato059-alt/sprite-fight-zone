@@ -140,7 +140,20 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     ],
     width: 64, height: 104,
   },
+  yuji: {
+    id: "yuji", name: "Yuji Itadori", sprite: yujiAsset.url,
+    atk: 100, def: 250, speed: 1.3,
+    abilities: [
+      { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 10 },
+    ],
+    width: 64, height: 104,
+  },
 };
+
+// Sukuna-possessed form (Yuji below 50hp). Not a selectable slot.
+const SUKUNA_NAME = "Yuji Itadori (Sukuna Possessed)";
+const SUKUNA_MAX_HP = 300;
+
 
 interface AfterImage { x: number; y: number; facing: 1 | -1; hue: number; life: number; }
 interface Fighter {
