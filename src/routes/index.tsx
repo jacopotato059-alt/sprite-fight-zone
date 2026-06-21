@@ -205,7 +205,7 @@ function Game() {
       onGround: false, jumpCd: 0, jumpsLeft: 2,
       decisionCd: 0, intent: "approach", intentTimer: 0,
       reactionDelay: 0.12 + Math.random() * 0.18,
-      sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [],
+      sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       tauntCd: 1 + Math.random() * 2,
     });
