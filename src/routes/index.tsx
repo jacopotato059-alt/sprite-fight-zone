@@ -869,6 +869,53 @@ function Game() {
                 continue;
               }
             }
+          } else if (f.type === "deku") {
+            // Detroit Smash (idx 2): air-only finisher
+            if (tryUse(2) && !f.onGround && f.y < groundY - 140 && dist < w * 0.95) {
+              f.state = "windup"; f.stateTimer = 2.0;
+              f.windupKind = "detroit"; f.windupGrow = 0;
+              f.vx = 0; f.vy = 0;
+              f.abilityCd[2] = 45; f.globalCd = 0.6;
+              playSound(SOUNDS.detroitSmash, 0.9);
+              triggerReaction(f, "angry");
+              continue;
+            }
+            // Tactical jump if Detroit Smash is ready & we're grounded
+            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2 && Math.random() < 0.04) {
+              f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.8; f.jumpsLeft = 1;
+            }
+            // Black Whip (idx 0): pull enemy in to set up combo
+            if (tryUse(0) && !f.whip && dist > MELEE_RANGE * 1.1 && dist < w * 0.85) {
+              f.state = "throw"; f.stateTimer = 0.75; f.vx = 0;
+              f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.abilityCd[0] = 6; f.globalCd = 0.4;
+              playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              continue;
+            }
+            // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
+            if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
+              const stack = f.punchStacks ?? 0;
+              const base = 8;
+              const dmg = stack === 0 ? base : stack === 1 ? Math.round(base * 1.2) : Math.round(base * 1.2 * 1.6);
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = dmg;
+              f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
+              f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              if (stack >= 2) {
+                f.punchStacks = 0; f.punchStackTimer = 0;
+                f.abilityCd[1] = 15;
+              } else {
+                f.punchStacks = stack + 1;
+                f.punchStackTimer = 2.0;
+                f.abilityCd[1] = 0.8;
+              }
+              f.globalCd = 0.18;
+              playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
+              continue;
+            }
           } else {
             // Dummy abilities
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
