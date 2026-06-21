@@ -372,10 +372,28 @@ function Game() {
     let raf = 0;
     const loop = (t: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = t;
-      const dt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
+      const rawDt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
       lastTimeRef.current = t;
+      // Hitstop: scale simulation dt for that crunchy heavy-hit pause
+      let dt = rawDt;
+      if (hitstopRef.current > 0) {
+        hitstopRef.current = Math.max(0, hitstopRef.current - rawDt);
+        dt = rawDt * 0.12;
+      }
       timeRef.current += dt;
       step(dt);
+      // Screen shake decay + apply to arena transform
+      if (shakeRef.current > 0) {
+        shakeRef.current = Math.max(0, shakeRef.current - rawDt);
+        if (arenaRef.current) {
+          const mag = shakeRef.current * 18;
+          const ox = (Math.random() - 0.5) * mag;
+          const oy = (Math.random() - 0.5) * mag;
+          arenaRef.current.style.transform = `translate(${ox.toFixed(1)}px, ${oy.toFixed(1)}px)`;
+        }
+      } else if (arenaRef.current && arenaRef.current.style.transform) {
+        arenaRef.current.style.transform = "";
+      }
       forceTick((n) => (n + 1) % 1_000_000);
       raf = requestAnimationFrame(loop);
     };
