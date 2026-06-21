@@ -851,6 +851,42 @@ function Game() {
                 f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
               }
+              }
+              // ===== Aerial combat: wall-run + backflip to dive bomb =====
+              if (f.aerialIntent === undefined) f.aerialIntent = 0;
+              f.aerialIntent = Math.max(0, f.aerialIntent - dt);
+              const wantsAerial = f.onGround && f.aerialIntent <= 0 && f.jumpCd <= 0
+                && (f.intent === "bait" || f.intent === "space" || hpRatio < 0.45)
+                && dist > MELEE_RANGE * 1.2
+                && Math.random() < 0.025;
+              if (wantsAerial) f.aerialIntent = 2.2;
+              if ((f.aerialIntent ?? 0) > 0 && f.onGround) {
+                // Sprint to the closer wall, then backflip toward enemy
+                const wallDir: 1 | -1 = (f.x < w / 2 ? -1 : 1);
+                f.facing = -wallDir as 1 | -1; // keep facing the enemy side
+                f.vx = wallDir * WALK_SPEED_BASE * def.speed * 1.5;
+                f.state = "walk"; f.walkPhase += dt * 16;
+                const atWall = (wallDir === -1 && f.x < 70) || (wallDir === 1 && f.x > w - 70);
+                if (atWall) {
+                  // Backflip: spring off the wall toward the enemy
+                  f.vy = HIGH_JUMP_VELOCITY * 0.95;
+                  f.vx = -wallDir * MAX_AIR_SPEED * 1.5;
+                  f.jumpCd = 0.7; f.jumpsLeft = 1;
+                  f.aerialIntent = 0;
+                  f.bounce = 0.35;
+                  triggerReaction(f, "chuckle");
+                  playSound(SOUNDS.punchLunge, 0.45);
+                }
+                continue;
+              }
+              // Air-to-ground Divergent dive when descending near enemy
+              if (!f.onGround && tryUse(0) && Math.abs(dx) < LUNGE_DISTANCE * 1.3 && f.vy > -120) {
+                f.state = "windup"; f.stateTimer = 0.1;
+                f.windupKind = "divergent"; f.windupGrow = 0;
+                f.pendingBlack = Math.random() < 0.3;
+                f.abilityCd[0] = 3; f.globalCd = 0.3;
+                continue;
+              }
             } else {
               // Sukuna — kite at mid-range: if enemy is right on top, prefer space
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
