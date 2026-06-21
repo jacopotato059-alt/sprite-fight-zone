@@ -934,6 +934,37 @@ function Game() {
       target.stateTimer = 0.32;
     }
 
+    // ===== Yuji Counter Strike trigger =====
+    if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
+      const att = fightersRef.current.find((x) => x.uid === attackerUid && x.state !== "dead");
+      if (att) {
+        target.counterActive = 0;
+        const adef = FIGHTERS[att.type];
+        // Teleport behind the attacker
+        const behindDir = att.facing as 1 | -1;
+        target.x = att.x - behindDir * (adef.width * 0.6 + 8);
+        target.y = att.y;
+        target.vx = 0; target.vy = 0;
+        target.facing = behindDir;
+        target.state = "throw"; target.stateTimer = 0.2;
+        target.stunned = 0; // free to act
+        target.bounce = 0.3;
+        // Weak punch damage but MASSIVE knockback
+        applyDamage(att, 8, behindDir, target.uid);
+        att.vx = behindDir * 1400;       // launched away
+        att.vy = -520;
+        att.stunned = Math.max(att.stunned, 0.4);
+        att.bodySlamFrom = target.uid;
+        att.bodySlamDmg = Math.max(20, Math.round(adef.def * 0.08)); // heavier fighters slam harder
+        spawnEffect("counterburst", target.x, target.y - 50, 0.45);
+        playSound(SOUNDS.punchHit, 0.85);
+        playSound(SOUNDS.divergent, 0.6);
+        triggerReaction(target, "chuckle");
+        return;
+      }
+    }
+
+
     // ===== Yuji → Sukuna transformation (about to die at 50 or less HP) =====
     if (target.type === "yuji" && !target.possessed && target.hp <= 50) {
       target.possessed = true;
