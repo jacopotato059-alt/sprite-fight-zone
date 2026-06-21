@@ -1020,10 +1020,11 @@ function Game() {
               }}
               onClick={(e) => { e.stopPropagation(); removeFighter(f.uid); }}
             >
-              <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 96 }}>
-                <div style={{ fontFamily: "Chakra Petch", fontSize: 9, fontWeight: 700, color: "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1 }}>
-                  {def.name.toUpperCase()}
+              <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 120 }}>
+                <div style={{ fontFamily: "Chakra Petch", fontSize: possessed ? 7.5 : 9, fontWeight: 700, color: possessed ? "#ff5a6e" : "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1, lineHeight: 1.1 }}>
+                  {displayName.toUpperCase()}
                 </div>
+
                 <div style={{ fontFamily: "Chakra Petch", fontSize: 8, color: "#c6c6c6", textShadow: "1px 1px 0 #000" }}>
                   {Math.ceil(f.hp)}/{f.maxHp}
                 </div>
