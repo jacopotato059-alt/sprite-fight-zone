@@ -310,6 +310,7 @@ function Game() {
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
+      f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       const sandeMult = f.sandeActive > 0 ? 3 : 1;
