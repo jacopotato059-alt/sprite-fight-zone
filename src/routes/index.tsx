@@ -301,8 +301,8 @@ function Game() {
     f.afterImages = [];
     f.afterTimer = 0;
     f.lastAfterX = f.x; f.lastAfterY = f.y;
-    if (withSound === "full") playSound(SOUNDS.sande, 0.55);
-    else playSoundFade(SOUNDS.sande, 700, 300, 0.55);
+    if (withSound === "full") playSound(SOUNDS.sande, 1.0);
+    else playSoundFade(SOUNDS.sande, 700, 300, 1.0);
   };
 
   const step = (dt: number) => {
