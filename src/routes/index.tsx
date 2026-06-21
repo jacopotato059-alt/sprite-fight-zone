@@ -362,13 +362,18 @@ function Game() {
               applyDamage(t2, f.lungeDamage ?? def.abilities[0].damage, f.facing, f.uid);
               playSound(SOUNDS.punchHit, 0.7);
               f.lungeHit = true;
+              // Combo follow-up: landing a hit shortens recovery so the AI can keep pressure
+              f.globalCd = Math.min(f.globalCd, 0.12);
+              f.intent = "punish"; f.intentTimer = 0.8;
+              f.tauntedBy = t2.uid; // stay locked on the fighter we're comboing
               break;
             }
           }
         }
         if (p >= 1) {
-          // missed? give target chance to taunt
+          // missed? landing lag + give target chance to taunt (whiff punish window)
           if (!f.lungeHit) {
+            f.globalCd = Math.max(f.globalCd, 0.35);
             const tgt = nearestEnemy(f, fighters);
             if (tgt) { tgt.lastDodgedFrom = f.uid; tauntAt(tgt, f); }
           }
@@ -377,6 +382,7 @@ function Game() {
           f.lungeHit = false; f.lungeFast = false;
           f.bounce = 0.22;
         }
+
       } else if (f.state === "shoot") {
         // Firing bullets sequence
         if (f.shotsLeft > 0) {
