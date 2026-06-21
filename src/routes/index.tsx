@@ -1385,6 +1385,43 @@ function Game() {
       }
     }
 
+    // ===== Passives — one-shot triggers when first crossing 30% HP =====
+    if (!isDot && target.hp > 0 && !target.passiveUsed) {
+      const ratio = target.hp / target.maxHp;
+      if (ratio < 0.30) {
+        if (target.type === "david") {
+          // Adrenaline: free 1.6s Sandevistan + reset shot CD
+          target.passiveUsed = true;
+          startSande(target, 1.6, "short");
+          target.abilityCd[1] = Math.min(target.abilityCd[1] ?? 0, 0.4);
+          triggerReaction(target, "angry");
+          shakeRef.current = Math.max(shakeRef.current, 0.25);
+        } else if (target.type === "yuji" && !target.possessed) {
+          // Second Wind: heal 25 HP
+          target.passiveUsed = true;
+          target.hp = Math.min(target.maxHp, target.hp + 25);
+          triggerReaction(target, "angry");
+          spawnEffect("counterburst", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.5);
+        } else if (target.type === "deku") {
+          // Plus Ultra: jumpstart the punch combo to stack 2 and refresh CDs
+          target.passiveUsed = true;
+          target.punchStacks = Math.max(target.punchStacks ?? 0, 2);
+          target.punchStackTimer = 3.0;
+          target.abilityCd[0] = 0; target.abilityCd[1] = 0;
+          spawnEffect("electric", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.55);
+          spawnEffect("greenfire", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.45);
+          triggerReaction(target, "angry");
+        } else if (target.type === "dummy") {
+          // Rage: brief invuln-style stun-cleanse + reset attack CD for a comeback swing
+          target.passiveUsed = true;
+          target.stunned = 0;
+          target.abilityCd[0] = 0;
+          target.bounce = 0.4;
+          triggerReaction(target, "angry");
+        }
+      }
+    }
+
 
     // ===== Yuji → Sukuna transformation (about to die at 50 or less HP) =====
     if (target.type === "yuji" && !target.possessed && target.hp <= 50) {
