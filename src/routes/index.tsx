@@ -992,6 +992,9 @@ function Game() {
 
         {fightersRef.current.map((f) => {
           const def = FIGHTERS[f.type];
+          const possessed = f.type === "yuji" && f.possessed;
+          const sprite = possessed ? sukunaAsset.url : def.sprite;
+          const displayName = possessed ? SUKUNA_NAME : def.name;
           // Pokemon-style wave bob during walk
           const wave = f.state === "walk" ? Math.sin(f.walkPhase) * 3 : 0;
           // Squash on landing
@@ -1000,6 +1003,10 @@ function Game() {
           const scaleX = 1 + sq * 0.25;
           const hpPct = f.hp / f.maxHp;
           const showGun = f.type === "david" && (f.state === "shoot" || timeRef.current % 1 < 1);
+          // Divergent Fist windup: grow to 1.2x and tint light blue
+          const windupActive = f.state === "windup" && f.windupKind === "divergent";
+          const grow = windupActive ? 1 + 0.2 * f.windupGrow : 1;
+
           return (
             <div
               key={f.uid}
