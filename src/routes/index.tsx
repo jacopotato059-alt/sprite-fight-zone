@@ -295,6 +295,8 @@ function Game() {
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
   const sizeRef = useRef({ w: 0, h: 0 });
+  const hitstopRef = useRef(0);
+  const shakeRef = useRef(0);
 
   useEffect(() => {
     const update = () => {
