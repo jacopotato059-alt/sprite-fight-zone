@@ -256,10 +256,12 @@ function Game() {
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
   const [showStats, setShowStats] = useState(false);
+  const [debugAi, setDebugAi] = useState(false);
   const [, forceTick] = useState(0);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
+  const damageNumsRef = useRef<{ uid: number; x: number; y: number; vy: number; life: number; maxLife: number; dmg: number; crit: boolean }[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
