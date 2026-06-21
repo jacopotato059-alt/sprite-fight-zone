@@ -230,7 +230,7 @@ interface Fighter {
   punchPitch?: number;
   punchHitStack?: number;
   aerialIntent?: number;
-  whip?: { targetUid: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; tipX?: number };
+  whip?: { mode: "enemy" | "wall"; targetUid?: number; wallX?: number; wallY?: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; dragStartY?: number; tipX?: number; tipY?: number; selfStartX?: number; selfStartY?: number };
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
@@ -239,7 +239,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric" | "shockwave" | "wallspark";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
@@ -489,29 +489,82 @@ function Game() {
       // ===== Deku Black Whip update =====
       if (f.whip) {
         f.whip.t += dt;
-        const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
-        if (!target || f.whip.t >= 0.75) {
-          f.whip = undefined;
-        } else if (f.whip.phase === "extend") {
-          // Tip travels from deku toward target
-          const k = Math.min(1, f.whip.t / 0.3);
-          f.whip.tipX = f.x + (target.x - f.x) * k;
-          if (k >= 1) {
-            f.whip.phase = "drag";
-            f.whip.dragStartX = target.x;
-            target.stunned = Math.max(target.stunned, 1.0);
-            target.state = "hurt";
-            target.stateTimer = Math.max(target.stateTimer, 1.0);
-            target.vy = -160;
-            playSound(SOUNDS.crackWhip, 0.75);
+        const wdef = FIGHTERS[f.type];
+        if (f.whip.mode === "wall") {
+          // Wall-Whip retreat: rope shoots to a wall anchor, then yanks Deku up/over
+          const anchorX = f.whip.wallX ?? f.x;
+          const anchorY = f.whip.wallY ?? (f.y - 180);
+          if (f.whip.t >= 0.9) {
+            f.whip = undefined;
+          } else if (f.whip.phase === "extend") {
+            const k = Math.min(1, f.whip.t / 0.22);
+            f.whip.tipX = f.x + (anchorX - f.x) * k;
+            f.whip.tipY = (f.whip.sourceY) + (anchorY - f.whip.sourceY) * k;
+            if (k >= 1) {
+              f.whip.phase = "drag";
+              f.whip.selfStartX = f.x;
+              f.whip.selfStartY = f.y;
+              spawnEffect("wallspark", anchorX, anchorY, 0.45);
+              playSound(SOUNDS.crackWhip, 0.75);
+            }
+          } else if (f.whip.phase === "drag") {
+            const dragT = Math.min(1, (f.whip.t - 0.22) / 0.42);
+            const ease = 1 - Math.pow(1 - dragT, 2.4);
+            const sx = f.whip.selfStartX ?? f.x;
+            const sy = f.whip.selfStartY ?? f.y;
+            f.x = sx + (anchorX - sx) * ease;
+            f.y = sy + (anchorY - sy) * ease;
+            f.vx = 0; f.vy = 0;
+            f.onGround = false;
+            f.state = "throw"; f.stateTimer = Math.max(f.stateTimer, 0.1);
+            f.whip.tipX = f.x; f.whip.tipY = f.y - wdef.height * 0.55;
+            if (dragT >= 1) {
+              // Release: spring off the wall outward + skyward for an aerial reset
+              const outDir: 1 | -1 = (anchorX < w / 2 ? 1 : -1);
+              f.vy = HIGH_JUMP_VELOCITY * 0.85;
+              f.vx = outDir * MAX_AIR_SPEED * 1.4;
+              f.facing = outDir;
+              f.jumpsLeft = 1; f.jumpCd = 0.35;
+              spawnEffect("electric", f.x, f.y - wdef.height * 0.55, 0.4);
+            }
           }
-        } else if (f.whip.phase === "drag") {
-          const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
-          const anchorX = f.x + f.facing * (FIGHTERS[f.type].width * 0.75);
-          const startX = f.whip.dragStartX ?? target.x;
-          target.x = startX + (anchorX - startX) * dragT;
-          target.vx = 0;
-          f.whip.tipX = target.x;
+        } else {
+          const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
+          if (!target || f.whip.t >= 0.75) {
+            f.whip = undefined;
+          } else if (f.whip.phase === "extend") {
+            // Tip travels from deku toward target
+            const k = Math.min(1, f.whip.t / 0.3);
+            f.whip.tipX = f.x + (target.x - f.x) * k;
+            const tgtY = target.y - FIGHTERS[target.type].height * 0.55;
+            f.whip.tipY = f.whip.sourceY + (tgtY - f.whip.sourceY) * k;
+            if (k >= 1) {
+              f.whip.phase = "drag";
+              f.whip.dragStartX = target.x;
+              f.whip.dragStartY = target.y;
+              target.stunned = Math.max(target.stunned, 1.0);
+              target.state = "hurt";
+              target.stateTimer = Math.max(target.stateTimer, 1.0);
+              target.vy = -160;
+              playSound(SOUNDS.crackWhip, 0.75);
+            }
+          } else if (f.whip.phase === "drag") {
+            const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
+            const anchorX = f.x + f.facing * (wdef.width * 0.75);
+            const startX = f.whip.dragStartX ?? target.x;
+            target.x = startX + (anchorX - startX) * dragT;
+            // Aerial variant: if Deku is airborne, pull target UP to him for juggle combos
+            if (!f.onGround) {
+              const startY = f.whip.dragStartY ?? target.y;
+              const anchorY = f.y + 10;
+              target.y = startY + (anchorY - startY) * dragT;
+              target.vy = -80;
+              target.onGround = false;
+            }
+            target.vx = 0;
+            f.whip.tipX = target.x;
+            f.whip.tipY = target.y - FIGHTERS[target.type].height * 0.55;
+          }
         }
       }
 
@@ -566,6 +619,8 @@ function Game() {
                 spawnEffect("bluefire", hitX, hitY, 0.6);
                 spawnEffect("counterburst", hitX, hitY, 0.6);
                 spawnEffect("electric", hitX, hitY, 0.6);
+                spawnEffect("shockwave", hitX, hitY + 30, 0.55);
+                spawnEffect("shockwave", hitX, hitY + 30, 0.75);
                 playSound(SOUNDS.electric, 0.7);
                 t2.vx = f.facing * 1400; t2.vy = -640;
                 t2.stunned = Math.max(t2.stunned, 0.6);
@@ -919,31 +974,66 @@ function Game() {
               }
             }
           } else if (f.type === "deku") {
-            // Detroit Smash (idx 2): air-only finisher
+            const hpLow = hpRatio < 0.45;
+            const heavyThreat = !!threat && (threat.urgent || (threat.kind === "windup"));
+            const wantsRetreat = f.intent === "retreat" || (hpLow && heavyThreat);
+
+            // === Wall-Whip retreat (sub-variant of Black Whip) ===
+            // Ropes to the nearest wall and yanks Deku up into the air for aerial reset.
+            if (tryUse(0) && !f.whip && f.onGround && wantsRetreat && dist < w) {
+              const wallDir: 1 | -1 = (f.x < w / 2 ? -1 : 1);
+              const wallX = wallDir === -1 ? 24 : w - 24;
+              const wallY = groundY - 220;
+              f.state = "throw"; f.stateTimer = 0.95; f.vx = 0;
+              f.whip = { mode: "wall", wallX, wallY, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.facing = wallDir;
+              f.abilityCd[0] = 6; f.globalCd = 0.4;
+              playSound(SOUNDS.punchLunge, 0.55);
+              playSound(SOUNDS.electric, 0.45);
+              spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.35);
+              triggerReaction(f, "chuckle");
+              continue;
+            }
+
+            // Detroit Smash (idx 2): air-only finisher — prioritized after a whip pull (combo)
             if (tryUse(2) && !f.onGround && f.y < groundY - 140 && dist < w * 0.95) {
               f.state = "windup"; f.stateTimer = 2.0;
               f.windupKind = "detroit"; f.windupGrow = 0;
               f.vx = 0; f.vy = 0;
               f.abilityCd[2] = 45; f.globalCd = 0.6;
               playSound(SOUNDS.detroitSmash, 0.9);
+              spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.6);
               triggerReaction(f, "angry");
               continue;
             }
-            // Tactical jump if Detroit Smash is ready & we're grounded
-            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2 && Math.random() < 0.04) {
+            // Tactical jump to set up Detroit Smash when ready
+            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2.2 && Math.random() < 0.06) {
               f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.8; f.jumpsLeft = 1;
             }
-            // Black Whip (idx 0): pull enemy in to set up combo
+
+            // === Air-Whip juggle (sub-variant of Black Whip used while airborne) ===
+            // Drags target upward to Deku's altitude for aerial combos.
+            if (tryUse(0) && !f.whip && !f.onGround && dist < w * 0.7 && f.vy > -200) {
+              f.state = "throw"; f.stateTimer = 0.6;
+              f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.abilityCd[0] = 6; f.globalCd = 0.35;
+              playSound(SOUNDS.punchLunge, 0.55);
+              playSound(SOUNDS.electric, 0.5);
+              spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.4);
+              continue;
+            }
+
+            // Ground Black Whip (idx 0): pull enemy in to set up combo
             if (tryUse(0) && !f.whip && dist > MELEE_RANGE * 1.1 && dist < w * 0.85) {
               f.state = "throw"; f.stateTimer = 0.75; f.vx = 0;
-              f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
               f.abilityCd[0] = 6; f.globalCd = 0.4;
-              playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              playSound(SOUNDS.punchLunge, 0.6);
               playSound(SOUNDS.electric, 0.5);
               spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
-            // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
+            // Punch combo (idx 1): chains 3 hits, finisher total cooldown = 4s
             if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
               const stack = f.punchStacks ?? 0;
               const base = 8;
@@ -958,11 +1048,11 @@ function Game() {
               f.punchHitStack = stack;
               if (stack >= 2) {
                 f.punchStacks = 0; f.punchStackTimer = 0;
-                f.abilityCd[1] = 15;
+                f.abilityCd[1] = 4;
               } else {
                 f.punchStacks = stack + 1;
                 f.punchStackTimer = 2.0;
-                f.abilityCd[1] = 0.8;
+                f.abilityCd[1] = 0.6;
               }
               f.globalCd = 0.18;
               playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
@@ -1697,6 +1787,53 @@ function Game() {
               </div>
             );
           }
+          if (e.kind === "shockwave") {
+            const prog = 1 - fade; // 0..1 expansion
+            const size = 40 + prog * 220;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 6, width: size, height: size / 3, opacity: fade * 0.95,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(1, 5 * fade)}px solid #bff5ff`,
+                  boxShadow: `0 0 ${20 * fade}px #6bd9ff, inset 0 0 ${16 * fade}px rgba(58,255,197,0.6)`,
+                }} />
+                <div className="absolute inset-2" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(1, 2 * fade)}px solid rgba(255,255,255,${0.9 * fade})`,
+                }} />
+              </div>
+            );
+          }
+          if (e.kind === "wallspark") {
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - 40, top: e.y - 40, width: 80, height: 80, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(180,255,220,0.7) 0%, rgba(58,255,197,0.35) 45%, rgba(0,0,0,0) 70%)",
+                  boxShadow: `0 0 ${18 * fade}px #3affc5`,
+                }} />
+                <svg viewBox="0 0 80 80" className="absolute inset-0" width="80" height="80">
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const ang = (i / 6) * Math.PI * 2 + e.seed;
+                    const len = 14 + ((e.seed * (i + 1)) % 14) + (1 - fade) * 14;
+                    const ex = 40 + Math.cos(ang) * len;
+                    const ey = 40 + Math.sin(ang) * len;
+                    return (
+                      <path key={i} d={`M40 40 L${ex.toFixed(1)} ${ey.toFixed(1)}`}
+                        stroke="#bff5ff" strokeWidth={2.2} fill="none" strokeLinecap="round"
+                        style={{ filter: `drop-shadow(0 0 ${4 * fade}px #3affc5)` }} />
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
@@ -1760,12 +1897,20 @@ function Game() {
           const srcX = f.x;
           const srcY = w.sourceY;
           const tipX = w.tipX ?? srcX;
-          const target = fightersRef.current.find((o) => o.uid === w.targetUid);
-          const tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : srcY;
+          let tipY: number;
+          if (w.mode === "wall") {
+            tipY = w.tipY ?? (w.wallY ?? srcY);
+          } else {
+            const target = fightersRef.current.find((o) => o.uid === w.targetUid);
+            tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : (w.tipY ?? srcY);
+          }
           const dx = tipX - srcX; const dy = tipY - srcY;
           const len = Math.max(1, Math.hypot(dx, dy));
           const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-          const fade = Math.max(0, 1 - w.t / 0.75);
+          const maxLife = w.mode === "wall" ? 0.9 : 0.75;
+          const fade = Math.max(0, 1 - w.t / maxLife);
+          // Crackle along the rope: small sparks every ~24px
+          const sparkCount = Math.min(8, Math.floor(len / 24));
           return (
             <div key={`whip-${f.uid}`} className="absolute pointer-events-none" style={{ left: srcX, top: srcY, opacity: fade }}>
               {/* main rope */}
@@ -1779,6 +1924,27 @@ function Game() {
                 transformOrigin: "0 50%",
                 borderRadius: 2,
               }} />
+              {/* electric crackle running along the rope */}
+              <div style={{
+                position: "absolute", left: 0, top: 0,
+                width: len, height: 1,
+                transform: `rotate(${angle}deg)`,
+                transformOrigin: "0 50%",
+              }}>
+                {Array.from({ length: sparkCount }).map((_, i) => {
+                  const k = (i + 0.5) / sparkCount;
+                  const jitter = Math.sin(timeRef.current * 30 + i * 1.7) * 3;
+                  return (
+                    <div key={i} style={{
+                      position: "absolute",
+                      left: k * len - 2, top: jitter - 2,
+                      width: 4, height: 4, borderRadius: "50%",
+                      background: "#bff5ff",
+                      boxShadow: "0 0 6px #3affc5, 0 0 10px #6bd9ff",
+                    }} />
+                  );
+                })}
+              </div>
               {/* side rope wisps during initial pop (first 0.18s) */}
               {w.t < 0.18 && [-1, 1].map((s) => (
                 <div key={s} style={{
@@ -1792,6 +1958,16 @@ function Game() {
                   borderRadius: 2,
                 }} />
               ))}
+              {/* anchor flare at the rope tip (wall hook) */}
+              {w.mode === "wall" && w.phase === "drag" && (
+                <div style={{
+                  position: "absolute",
+                  left: dx - 8, top: dy - 8,
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: "radial-gradient(circle, #fff 0%, #3affc5 60%, rgba(0,0,0,0) 100%)",
+                  boxShadow: "0 0 12px #3affc5, 0 0 22px #6bd9ff",
+                }} />
+              )}
             </div>
           );
         })}
