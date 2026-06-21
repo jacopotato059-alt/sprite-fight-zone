@@ -474,6 +474,43 @@ function Game() {
         f.dots = f.dots.filter((d) => d.ticksLeft > 0);
       }
 
+      // ===== Deku punch-combo stack window =====
+      if ((f.punchStackTimer ?? 0) > 0) {
+        f.punchStackTimer = (f.punchStackTimer ?? 0) - dt;
+        if ((f.punchStackTimer ?? 0) <= 0 && (f.punchStacks ?? 0) > 0) {
+          f.punchStacks = 0;
+        }
+      }
+
+      // ===== Deku Black Whip update =====
+      if (f.whip) {
+        f.whip.t += dt;
+        const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
+        if (!target || f.whip.t >= 0.75) {
+          f.whip = undefined;
+        } else if (f.whip.phase === "extend") {
+          // Tip travels from deku toward target
+          const k = Math.min(1, f.whip.t / 0.3);
+          f.whip.tipX = f.x + (target.x - f.x) * k;
+          if (k >= 1) {
+            f.whip.phase = "drag";
+            f.whip.dragStartX = target.x;
+            target.stunned = Math.max(target.stunned, 1.0);
+            target.state = "hurt";
+            target.stateTimer = Math.max(target.stateTimer, 1.0);
+            target.vy = -160;
+            playSound(SOUNDS.crackWhip, 0.75);
+          }
+        } else if (f.whip.phase === "drag") {
+          const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
+          const anchorX = f.x + f.facing * (FIGHTERS[f.type].width * 0.75);
+          const startX = f.whip.dragStartX ?? target.x;
+          target.x = startX + (anchorX - startX) * dragT;
+          target.vx = 0;
+          f.whip.tipX = target.x;
+        }
+      }
+
       // ===== Stun lockout — skip AI/movement while stunned =====
       if (f.stunned > 0 && f.state !== "lunge" && f.state !== "windup") {
         f.vx *= 0.7;
