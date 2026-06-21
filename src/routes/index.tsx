@@ -264,7 +264,7 @@ function Game() {
 
   const tauntAt = (taunter: Fighter, target: Fighter) => {
     if (taunter.tauntCd > 0) return;
-    if (Math.random() > 0.7) return; // 70% chance
+    if (Math.random() > 0.1) return; // 10% chance
     taunter.tauntCd = 3 + Math.random() * 3;
     taunter.state = "taunt";
     taunter.stateTimer = 0.6;
