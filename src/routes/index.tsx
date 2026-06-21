@@ -206,7 +206,7 @@ interface Fighter {
   lastTrickedFrom?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
   pierceLeft?: number; hitUids?: number[];
@@ -735,13 +735,30 @@ function Game() {
                 continue;
               }
             } else {
-              // Sukuna — Dismantle: linear, fast, piercing slash
-              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+              // Sukuna — Clash: quick basic projectile, 2s CD
+              const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
+              if (tryUse(1) && dist > MELEE_RANGE * 0.5 && dist < w * 0.9) {
+                f.state = "throw"; f.stateTimer = 0.18;
+                const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = dir; f.vx = 0;
+                const lead = Math.sign(enemy.vx) * Math.min(50, Math.abs(enemy.vx) * 0.12);
+                projectilesRef.current.push({
+                  uid: nextUid(), ownerUid: f.uid, kind: "clash",
+                  x: f.x + dir * 28, y: f.y - def.height * 0.55,
+                  vx: dir * (PROJECTILE_SPEED * 1.3) + lead, vy: 0,
+                  damage: 15, ttl: 1.6,
+                });
+                f.abilityCd[1] = 2; f.globalCd = 0.25;
+                playSound(SOUNDS.throwSwing, 0.5);
+                continue;
+              }
+              // Sukuna — Dismantle: linear, fast, piercing slash (save it — long CD)
+              if (tryUse(0) && !enemyBleeding && dist > MELEE_RANGE * 0.6 && dist < w * 0.95) {
                 f.state = "windup"; f.stateTimer = 0.16;
                 f.windupKind = "dismantle"; f.windupGrow = 0;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                f.abilityCd[0] = 4; f.globalCd = 0.4;
+                f.abilityCd[0] = 15; f.globalCd = 0.4;
                 continue;
               }
             }
@@ -916,13 +933,18 @@ function Game() {
           if (p.kind === "dismantle") {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.knife, 0.7);
-            // Bleed: 2 dmg every 0.1s for ~14s of cuts (stuns while ticking)
-            t.dots.push({ interval: 0.1, timer: 0.1, ticksLeft: 140, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            // Bleed: 2 dmg every 0.1s for 15 cuts (stuns while ticking)
+            t.dots.push({ interval: 0.1, timer: 0.1, ticksLeft: 15, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
             t.stunned = Math.max(t.stunned, 0.4);
             spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.4);
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
             if ((p.pierceLeft ?? 0) <= 0) return false;
+          } else if (p.kind === "clash") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.knife, 0.7);
+            spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.3);
+            return false;
           } else {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.damage, 0.45);
@@ -993,7 +1015,7 @@ function Game() {
       target.state = "idle";
       target.stateTimer = 0;
       target.dots = [];
-      target.abilityCd = [0];
+      target.abilityCd = [0, 0];
       target.globalCd = 0.5;
       target.bounce = 0.4;
       playSound(SOUNDS.sukunaTransform, 1.0);
@@ -1239,6 +1261,16 @@ function Game() {
                 imageRendering: "pixelated", objectFit: "contain",
                 transform: `scaleX(${Math.sign(p.vx) || 1})`,
                 filter: "drop-shadow(0 0 6px rgba(180,30,40,0.8)) brightness(0.95)",
+              }} />
+          ) : p.kind === "clash" ? (
+            <div key={p.uid} className="absolute pointer-events-none"
+              style={{
+                left: p.x - 14, top: p.y - 4,
+                width: 28, height: 8,
+                background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, #fff 35%, #ffb0b0 70%, rgba(180,30,40,0) 100%)",
+                transform: `scaleX(${Math.sign(p.vx) || 1}) skewX(-20deg)`,
+                filter: "drop-shadow(0 0 6px rgba(220,60,80,0.85))",
+                borderRadius: 4,
               }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
