@@ -1,11 +1,11 @@
 {
-  "version": 1,
   "asset_id": "6cdc0b36-95ef-4a04-8f45-506a0a750e3b",
-  "project_id": "d803d39d-6970-4fa0-a1cc-a166369ce959",
-  "url": "/__l5e/assets-v1/6cdc0b36-95ef-4a04-8f45-506a0a750e3b/dismantle.png",
-  "r2_key": "a/v1/d803d39d-6970-4fa0-a1cc-a166369ce959/6cdc0b36-95ef-4a04-8f45-506a0a750e3b/dismantle.png",
-  "original_filename": "dismantle.png",
-  "size": 99428,
   "content_type": "image/png",
-  "created_at": "2026-06-21T05:01:01Z"
+  "created_at": "2026-06-21T05:01:01Z",
+  "original_filename": "dismantle.png",
+  "project_id": "3f66809e-961a-4a99-854a-3e7da678e20b",
+  "r2_key": "a/v1/3f66809e-961a-4a99-854a-3e7da678e20b/6cdc0b36-95ef-4a04-8f45-506a0a750e3b/dismantle.png",
+  "size": 99428,
+  "url": "/__l5e/assets-v1/6cdc0b36-95ef-4a04-8f45-506a0a750e3b/dismantle.png",
+  "version": 1
 }
