@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
+import yujiAsset from "@/assets/yuji.png.asset.json";
+import sukunaAsset from "@/assets/sukuna.png.asset.json";
+import dismantleAsset from "@/assets/dismantle.png.asset.json";
 import tauntIcon from "@/assets/icons/taunt.png.asset.json";
 import angryIcon from "@/assets/icons/angry.png.asset.json";
 import chuckleIcon from "@/assets/icons/chuckle.png.asset.json";
@@ -17,6 +20,13 @@ import sndSande from "@/assets/sounds/sandevistan.mp3.asset.json";
 import sndTaunt from "@/assets/sounds/taunt.mp3.asset.json";
 import sndAngry from "@/assets/sounds/angry.mp3.asset.json";
 import sndChuckle from "@/assets/sounds/chuckle.mp3.asset.json";
+import sndDivergent from "@/assets/sounds/divergent-hit.mp3.asset.json";
+import sndBlackFlash from "@/assets/sounds/black-flash.mp3.asset.json";
+import sndKnife from "@/assets/sounds/knife-slash.mp3.asset.json";
+import sndSukunaTransform from "@/assets/sounds/sukuna-transform.mp3.asset.json";
+import sndDismantle1 from "@/assets/sounds/dismantle-1.mp3.asset.json";
+import sndDismantle2 from "@/assets/sounds/dismantle-2.mp3.asset.json";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,6 +43,8 @@ const SOUNDS = {
   damage: sndDamage.url, punchHit: sndPunchHit.url, throwSwing: sndThrow.url,
   pistol: sndPistol.url, sande: sndSande.url,
   taunt: sndTaunt.url, angry: sndAngry.url, chuckle: sndChuckle.url,
+  divergent: sndDivergent.url, blackFlash: sndBlackFlash.url, knife: sndKnife.url,
+  sukunaTransform: sndSukunaTransform.url, dismantle1: sndDismantle1.url, dismantle2: sndDismantle2.url,
 };
 
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
@@ -58,7 +70,48 @@ function playSoundFade(url: string, holdMs: number, fadeMs: number, volume = 0.6
   }, holdMs);
 }
 
-type FighterTypeId = "dummy" | "david";
+// Web Audio amplified playback so sounds can exceed the 0-1 HTMLAudio cap.
+let __audioCtx: AudioContext | null = null;
+const __bufCache: Record<string, AudioBuffer> = {};
+function getCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!__audioCtx) {
+    try { __audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); }
+    catch { return null; }
+  }
+  return __audioCtx;
+}
+function playBoosted(url: string, gain = 8, stopAfterMs?: number) {
+  const ctx = getCtx();
+  if (!ctx) { playSound(url, 1); return; }
+  const start = (buf: AudioBuffer) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g); g.connect(ctx.destination);
+    src.start();
+    if (stopAfterMs) {
+      const t0 = ctx.currentTime + stopAfterMs / 1000;
+      g.gain.setValueAtTime(gain, Math.max(ctx.currentTime, t0 - 0.25));
+      g.gain.linearRampToValueAtTime(0, t0);
+      try { src.stop(t0 + 0.05); } catch {}
+    }
+  };
+  const go = () => {
+    const cached = __bufCache[url];
+    if (cached) { start(cached); return; }
+    fetch(url).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a))
+      .then((buf) => { __bufCache[url] = buf; start(buf); })
+      .catch(() => playSound(url, 1));
+  };
+  if (ctx.state === "suspended") ctx.resume().then(go).catch(go);
+  else go();
+}
+
+type FighterTypeId = "dummy" | "david" | "yuji";
+
+
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
 interface FighterDef {
@@ -87,7 +140,20 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     ],
     width: 64, height: 104,
   },
+  yuji: {
+    id: "yuji", name: "Yuji Itadori", sprite: yujiAsset.url,
+    atk: 100, def: 250, speed: 1.3,
+    abilities: [
+      { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 10 },
+    ],
+    width: 64, height: 104,
+  },
 };
+
+// Sukuna-possessed form (Yuji below 50hp). Not a selectable slot.
+const SUKUNA_NAME = "Yuji Itadori (Sukuna Possessed)";
+const SUKUNA_MAX_HP = 300;
+
 
 interface AfterImage { x: number; y: number; facing: 1 | -1; hue: number; life: number; }
 interface Fighter {
@@ -95,7 +161,7 @@ interface Fighter {
   x: number; y: number; vx: number; vy: number;
   hp: number; maxHp: number;
   facing: 1 | -1;
-  state: "idle" | "walk" | "lunge" | "throw" | "shoot" | "hurt" | "dead" | "taunt";
+  state: "idle" | "walk" | "lunge" | "throw" | "shoot" | "hurt" | "dead" | "taunt" | "windup";
   stateTimer: number;
   // per-ability cooldowns (index aligned with FIGHTERS[type].abilities)
   abilityCd: number[];
@@ -112,6 +178,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
@@ -120,6 +187,12 @@ interface Fighter {
   lastAfterX?: number; lastAfterY?: number;
   sandeAttackCd: number;
   shotsLeft: number; shotTimer: number; shotTarget?: number;
+  // Yuji / Sukuna
+  possessed: boolean;
+  windupKind?: "divergent" | "dismantle";
+  windupGrow: number; // 0..1 visual grow/tint progress during windup
+  pendingBlack?: boolean;
+  dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
   tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
@@ -128,10 +201,16 @@ interface Fighter {
   lastTrickedFrom?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
+  pierceLeft?: number; hitUids?: number[];
 }
+interface Effect {
+  uid: number; kind: "bluefire" | "blackflash";
+  x: number; y: number; life: number; maxLife: number; seed: number;
+}
+
 
 const GRAVITY = 2200;
 const GROUND_OFFSET = 30;
@@ -146,6 +225,7 @@ const LUNGE_DISTANCE = 220;
 const LUNGE_DURATION = 0.22;
 const PROJECTILE_SPEED = 540;
 const BULLET_SPEED = 900;
+const DISMANTLE_SPEED = 1050; // fast linear piercing slash
 const PUSH_RADIUS = 48; // anti-overlap separation
 
 let __uid = 1;
@@ -174,6 +254,7 @@ function Game() {
   const [, forceTick] = useState(0);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
+  const effectsRef = useRef<Effect[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
@@ -211,7 +292,9 @@ function Game() {
       reactionDelay: 0.12 + Math.random() * 0.18,
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
+      possessed: false, windupGrow: 0, dots: [],
       tauntCd: 1 + Math.random() * 2,
+
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
@@ -225,8 +308,17 @@ function Game() {
   const restart = useCallback(() => {
     fightersRef.current = [];
     projectilesRef.current = [];
+    effectsRef.current = [];
     playSound(SOUNDS.click, 0.5);
   }, []);
+
+  const spawnEffect = (kind: "bluefire" | "blackflash", x: number, y: number) => {
+    effectsRef.current.push({
+      uid: nextUid(), kind, x, y,
+      life: 0.5, maxLife: 0.5, seed: Math.random() * 1000,
+    });
+  };
+
 
   useEffect(() => {
     let raf = 0;
@@ -301,8 +393,8 @@ function Game() {
     f.afterImages = [];
     f.afterTimer = 0;
     f.lastAfterX = f.x; f.lastAfterY = f.y;
-    if (withSound === "full") playSound(SOUNDS.sande, 1.0);
-    else playSoundFade(SOUNDS.sande, 700, 300, 1.0);
+    if (withSound === "full") playBoosted(SOUNDS.sande, 8);
+    else playBoosted(SOUNDS.sande, 8, 1000);
   };
 
   const step = (dt: number) => {
@@ -327,6 +419,21 @@ function Game() {
       f.sandeActive = Math.max(0, f.sandeActive - dt);
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
+
+      // ===== Damage-over-time (Sukuna Dismantle bleed) =====
+      if (f.dots.length) {
+        for (const d of f.dots) {
+          d.timer -= dt;
+          if (d.timer <= 0 && d.ticksLeft > 0) {
+            d.timer += d.interval;
+            d.ticksLeft -= 1;
+            applyDamage(f, d.dmg, d.fromFacing, d.ownerUid, true);
+            playSound(SOUNDS.knife, 0.6);
+          }
+        }
+        f.dots = f.dots.filter((d) => d.ticksLeft > 0);
+      }
+
 
       const sandeMult = f.sandeActive > 0 ? 3 : 1;
 
@@ -360,7 +467,16 @@ function Game() {
             if (t2.uid === f.uid || t2.state === "dead") continue;
             if (Math.abs(t2.x - f.x) < MELEE_RANGE * 0.75 && Math.abs(t2.y - f.y) < def.height) {
               applyDamage(t2, f.lungeDamage ?? def.abilities[0].damage, f.facing, f.uid);
-              playSound(SOUNDS.punchHit, 0.7);
+              const hitX = t2.x; const hitY = t2.y - def.height * 0.5;
+              if (f.lungeKind === "divergentBlack") {
+                playSound(SOUNDS.blackFlash, 0.95);
+                spawnEffect("blackflash", hitX, hitY);
+              } else if (f.lungeKind === "divergent") {
+                playSound(SOUNDS.divergent, 0.85);
+                spawnEffect("bluefire", hitX, hitY);
+              } else {
+                playSound(SOUNDS.punchHit, 0.7);
+              }
               f.lungeHit = true;
               // Combo follow-up: landing a hit shortens recovery so the AI can keep pressure
               f.globalCd = Math.min(f.globalCd, 0.12);
@@ -370,6 +486,7 @@ function Game() {
             }
           }
         }
+
         if (p >= 1) {
           // missed? landing lag + give target chance to taunt (whiff punish window)
           if (!f.lungeHit) {
@@ -379,9 +496,45 @@ function Game() {
           }
           f.state = "idle";
           f.lungeFromX = f.lungeToX = f.lungeProgress = undefined;
-          f.lungeHit = false; f.lungeFast = false;
+          f.lungeHit = false; f.lungeFast = false; f.lungeKind = undefined;
           f.bounce = 0.22;
         }
+
+      } else if (f.state === "windup") {
+        // Charging an attack; grow/tint visual progress toward 1
+        f.windupGrow = Math.min(1, f.windupGrow + dt / Math.max(0.06, f.stateTimer + dt));
+        f.vx *= 0.6;
+        if (f.stateTimer <= 0) {
+          if (f.windupKind === "divergent") {
+            // Revert size/tint and lunge forward with the divergent fist
+            f.windupGrow = 0;
+            const black = !!f.pendingBlack;
+            const tgt = nearestEnemy(f, fighters);
+            const dist = tgt ? Math.abs(tgt.x - f.x) : LUNGE_DISTANCE;
+            f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.2;
+            f.lungeFromX = f.x;
+            f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
+            f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+            f.lungeDamage = black ? 65 : 35;
+            f.lungeKind = black ? "divergentBlack" : "divergent";
+            f.pendingBlack = false;
+          } else if (f.windupKind === "dismantle") {
+            // Launch the linear, piercing Dismantle slash
+            const dir = f.facing;
+            projectilesRef.current.push({
+              uid: nextUid(), ownerUid: f.uid, kind: "dismantle",
+              x: f.x + dir * 30, y: f.y - def.height * 0.55,
+              vx: dir * DISMANTLE_SPEED, vy: 0,
+              damage: 25, ttl: 1.4, pierceLeft: 2, hitUids: [],
+            });
+            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
+            f.state = "throw"; f.stateTimer = 0.2;
+          } else {
+            f.state = "idle";
+          }
+          f.windupKind = undefined;
+        }
+
 
       } else if (f.state === "shoot") {
         // Firing bullets sequence
@@ -518,6 +671,28 @@ function Game() {
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
             }
+          } else if (f.type === "yuji") {
+            if (!f.possessed) {
+              // Divergent Fist — fast windup, grows + tints light blue, then lunges
+              if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
+                f.state = "windup"; f.stateTimer = 0.12; // faster preparation
+                f.windupKind = "divergent"; f.windupGrow = 0;
+                f.pendingBlack = Math.random() < 0.25; // 25% Black Flash
+                f.vx = 0;
+                f.abilityCd[0] = 10; f.globalCd = 0.3;
+                continue;
+              }
+            } else {
+              // Sukuna — Dismantle: linear, fast, piercing slash
+              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+                f.state = "windup"; f.stateTimer = 0.16;
+                f.windupKind = "dismantle"; f.windupGrow = 0;
+                const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = dir; f.vx = 0;
+                f.abilityCd[0] = 7; f.globalCd = 0.4;
+                continue;
+              }
+            }
           } else {
             // Dummy abilities
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
@@ -545,6 +720,7 @@ function Game() {
               continue;
             }
           }
+
 
           // ===== Movement (Smash-style spacing) =====
           let desired = MELEE_RANGE * 0.9;
@@ -662,34 +838,71 @@ function Game() {
       if (p.x < -50 || p.x > w + 50 || p.y > groundY + 50) return false;
       for (const t of fighters) {
         if (t.uid === p.ownerUid || t.state === "dead") continue;
+        if (p.kind === "dismantle" && p.hitUids?.includes(t.uid)) continue;
         const tdef = FIGHTERS[t.type];
         if (Math.abs(t.x - p.x) < tdef.width * 0.55 && Math.abs((t.y - tdef.height * 0.5) - p.y) < tdef.height * 0.55) {
-          applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
-          playSound(SOUNDS.damage, 0.45);
-          return false;
+          if (p.kind === "dismantle") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.knife, 0.7);
+            // Bleed: 2 dmg every 0.7s for 1.5s (2 ticks)
+            t.dots.push({ interval: 0.7, timer: 0.7, ticksLeft: 2, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            p.hitUids?.push(t.uid);
+            p.pierceLeft = (p.pierceLeft ?? 1) - 1;
+            if ((p.pierceLeft ?? 0) <= 0) return false;
+          } else {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.damage, 0.45);
+            return false;
+          }
         }
       }
       return true;
     });
 
+    // ===== Effects aging =====
+    if (effectsRef.current.length) {
+      for (const e of effectsRef.current) e.life -= dt;
+      effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
+    }
+
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
 
-  const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number) => {
+
+  const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
     target.hp -= dmg;
-    target.hitFlash = 0.25;
-    target.bounce = 0.3;
-    target.vx = fromFacing * 260;
-    target.vy = -300;
-    target.state = "hurt";
-    target.stateTimer = 0.32;
+    target.hitFlash = isDot ? 0.15 : 0.25;
+    if (!isDot) {
+      target.bounce = 0.3;
+      target.vx = fromFacing * 260;
+      target.vy = -300;
+      target.state = "hurt";
+      target.stateTimer = 0.32;
+    }
+
+    // ===== Yuji → Sukuna transformation (about to die at 50 or less HP) =====
+    if (target.type === "yuji" && !target.possessed && target.hp <= 50) {
+      target.possessed = true;
+      target.maxHp = SUKUNA_MAX_HP;
+      target.hp = SUKUNA_MAX_HP;
+      target.state = "idle";
+      target.stateTimer = 0;
+      target.dots = [];
+      target.abilityCd = [0];
+      target.globalCd = 0.5;
+      target.bounce = 0.4;
+      playSound(SOUNDS.sukunaTransform, 1.0);
+      triggerReaction(target, "angry");
+      return;
+    }
+
     if (target.hp <= 0) {
       target.hp = 0;
       target.state = "dead";
     } else {
-      playSound(SOUNDS.damage, 0.4);
+      if (!isDot) playSound(SOUNDS.damage, 0.4);
       // Attacker may chuckle on hit (low chance) and target gets angry
-      if (attackerUid) {
+      if (attackerUid && !isDot) {
         const att = fightersRef.current.find((x) => x.uid === attackerUid);
         if (att && Math.random() < 0.3 && att.tauntCd <= 0) {
           triggerReaction(att, "chuckle"); att.tauntCd = 2 + Math.random() * 2;
@@ -698,6 +911,7 @@ function Game() {
       }
     }
   };
+
 
   const nearestEnemy = (self: Fighter, all: Fighter[]) => {
     let best: Fighter | null = null; let bestScore = Infinity;
@@ -778,6 +992,9 @@ function Game() {
 
         {fightersRef.current.map((f) => {
           const def = FIGHTERS[f.type];
+          const possessed = f.type === "yuji" && f.possessed;
+          const sprite = possessed ? sukunaAsset.url : def.sprite;
+          const displayName = possessed ? SUKUNA_NAME : def.name;
           // Pokemon-style wave bob during walk
           const wave = f.state === "walk" ? Math.sin(f.walkPhase) * 3 : 0;
           // Squash on landing
@@ -786,6 +1003,10 @@ function Game() {
           const scaleX = 1 + sq * 0.25;
           const hpPct = f.hp / f.maxHp;
           const showGun = f.type === "david" && (f.state === "shoot" || timeRef.current % 1 < 1);
+          // Divergent Fist windup: grow to 1.2x and tint light blue
+          const windupActive = f.state === "windup" && f.windupKind === "divergent";
+          const grow = windupActive ? 1 + 0.2 * f.windupGrow : 1;
+
           return (
             <div
               key={f.uid}
@@ -799,10 +1020,11 @@ function Game() {
               }}
               onClick={(e) => { e.stopPropagation(); removeFighter(f.uid); }}
             >
-              <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 96 }}>
-                <div style={{ fontFamily: "Chakra Petch", fontSize: 9, fontWeight: 700, color: "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1 }}>
-                  {def.name.toUpperCase()}
+              <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 120 }}>
+                <div style={{ fontFamily: "Chakra Petch", fontSize: possessed ? 7.5 : 9, fontWeight: 700, color: possessed ? "#ff5a6e" : "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1, lineHeight: 1.1 }}>
+                  {displayName.toUpperCase()}
                 </div>
+
                 <div style={{ fontFamily: "Chakra Petch", fontSize: 8, color: "#c6c6c6", textShadow: "1px 1px 0 #000" }}>
                   {Math.ceil(f.hp)}/{f.maxHp}
                 </div>
@@ -832,16 +1054,18 @@ function Game() {
               )}
 
               <img
-                src={def.sprite}
-                alt={def.name}
+                src={sprite}
+                alt={displayName}
                 draggable={false}
                 style={{
                   width: "100%", height: "100%",
                   imageRendering: "pixelated", objectFit: "contain",
-                  transform: `scaleX(${f.facing * scaleX}) scaleY(${scaleY})`,
+                  transform: `scaleX(${f.facing * scaleX * grow}) scaleY(${scaleY * grow})`,
                   transformOrigin: "bottom center",
                   filter: f.hitFlash > 0
                     ? `brightness(0.4) saturate(2) drop-shadow(0 0 6px #ff5544)`
+                    : windupActive
+                    ? `brightness(1.15) saturate(1.4) drop-shadow(0 0 ${4 + 12 * f.windupGrow}px #5ec8ff) drop-shadow(0 0 ${6 + 16 * f.windupGrow}px #2aa8ff) hue-rotate(${f.windupGrow * 25}deg)`
                     : f.sandeActive > 0
                     ? `drop-shadow(0 0 10px hsl(${hueAt(timeRef.current)} 100% 60%))`
                     : "drop-shadow(0 4px 0 rgba(0,0,0,0.5))",
@@ -849,6 +1073,7 @@ function Game() {
                   pointerEvents: "auto",
                 }}
               />
+
 
               {/* Gun for David - sits on the side, mirrored opposite */}
               {showGun && (
@@ -877,6 +1102,16 @@ function Game() {
                 border: "1px solid #000",
                 boxShadow: "0 0 6px #ffb347",
               }} />
+          ) : p.kind === "dismantle" ? (
+            <img key={p.uid} src={dismantleAsset.url} alt="" draggable={false}
+              className="absolute pointer-events-none"
+              style={{
+                left: p.x - 26, top: p.y - 40,
+                width: 52, height: 80,
+                imageRendering: "pixelated", objectFit: "contain",
+                transform: `scaleX(${Math.sign(p.vx) || 1})`,
+                filter: "drop-shadow(0 0 6px rgba(180,30,40,0.8)) brightness(0.95)",
+              }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
               style={{
@@ -886,7 +1121,60 @@ function Game() {
               }} />
           )
         ))}
+
+        {/* Hit effects layer (above fighters) */}
+        {effectsRef.current.map((e) => {
+          const t = 1 - e.life / e.maxLife; // 0..1 progress
+          const fade = e.life / e.maxLife;   // 1..0
+          if (e.kind === "bluefire") {
+            const size = 40 + t * 60;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(120,200,255,0.9) 35%, rgba(40,140,255,0.6) 60%, rgba(20,80,220,0) 75%)",
+                boxShadow: `0 0 ${18 * fade}px rgba(90,200,255,0.9), 0 0 ${30 * fade}px rgba(40,140,255,0.7)`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
+          // Black Flash: animated black lightning bolts with glowing red outline
+          const bolts = 5;
+          return (
+            <div key={e.uid} className="absolute pointer-events-none" style={{
+              left: e.x - 60, top: e.y - 60, width: 120, height: 120, opacity: fade,
+            }}>
+              <div className="absolute inset-0" style={{
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(255,40,60,0.45) 0%, rgba(120,0,20,0.25) 45%, rgba(0,0,0,0) 70%)",
+                boxShadow: `0 0 ${24 * fade}px rgba(255,30,50,0.9)`,
+              }} />
+              <svg viewBox="0 0 120 120" className="absolute inset-0" width="120" height="120">
+                {Array.from({ length: bolts }).map((_, i) => {
+                  const ang = (i / bolts) * Math.PI * 2 + e.seed + t * 6;
+                  const len = 50 + ((e.seed * (i + 1)) % 18);
+                  const mx = 60 + Math.cos(ang) * len * 0.5 + Math.sin(t * 30 + i) * 6;
+                  const my = 60 + Math.sin(ang) * len * 0.5 + Math.cos(t * 30 + i) * 6;
+                  const ex = 60 + Math.cos(ang) * len;
+                  const ey = 60 + Math.sin(ang) * len;
+                  const d = `M60 60 L${mx.toFixed(1)} ${my.toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+                  return (
+                    <g key={i}>
+                      <path d={d} stroke="#ff1f3a" strokeWidth={5} fill="none"
+                        strokeLinejoin="round" strokeLinecap="round"
+                        style={{ filter: `drop-shadow(0 0 ${5 * fade}px #ff2540) drop-shadow(0 0 ${9 * fade}px #ff0030)` }} />
+                      <path d={d} stroke="#0a0a0a" strokeWidth={2.4} fill="none"
+                        strokeLinejoin="round" strokeLinecap="round" />
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          );
+        })}
       </div>
+
 
       {showFighters && (
         <div className="absolute inset-0 z-20 flex items-center justify-center" onClick={() => { playSound(SOUNDS.click, 0.4); setShowFighters(false); setShowStats(false); }}>
@@ -902,14 +1190,18 @@ function Game() {
 
             {!showStats ? (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <SlotCard selected={selectedSlot === "dummy"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("dummy"); }}
                     sprite={FIGHTERS.dummy.sprite} name="Dummy" />
                   <SlotCard selected={selectedSlot === "david"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("david"); }}
                     sprite={FIGHTERS.david.sprite} name="David Martinez" />
+                  <SlotCard selected={selectedSlot === "yuji"}
+                    onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("yuji"); }}
+                    sprite={FIGHTERS.yuji.sprite} name="Yuji Itadori" />
                 </div>
+
 
                 <div className="mt-6 flex flex-col gap-3 items-center">
                   <button className="mc-btn"
