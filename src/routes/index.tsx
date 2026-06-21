@@ -137,6 +137,10 @@ const GRAVITY = 2200;
 const GROUND_OFFSET = 30;
 const WALK_SPEED_BASE = 130;
 const JUMP_VELOCITY = -680;
+const HIGH_JUMP_VELOCITY = -1080; // launch high into the sky for positioning advantage
+const AIR_ACCEL = 900; // mid-air drift control
+const MAX_AIR_SPEED = 240;
+const FAST_FALL = 900; // extra downward accel when committing to a dive
 const MELEE_RANGE = 90;
 const LUNGE_DISTANCE = 220;
 const LUNGE_DURATION = 0.22;
@@ -240,19 +244,30 @@ function Game() {
   }, []);
 
   const incomingThreat = (f: Fighter) => {
+    // Projectiles: react earlier (wider window) and gauge urgency by distance
     for (const p of projectilesRef.current) {
       if (p.ownerUid === f.uid) continue;
       const dx = f.x - p.x;
-      if (Math.sign(p.vx) === Math.sign(dx) && Math.abs(dx) < 320 && Math.abs(p.y - (f.y - 50)) < 90) return { kind: "proj" as const, p };
+      const closing = Math.sign(p.vx) === Math.sign(dx);
+      if (closing && Math.abs(dx) < 420 && Math.abs(p.y - (f.y - 50)) < 110) {
+        const urgent = Math.abs(dx) < 200;
+        return { kind: "proj" as const, p, urgent };
+      }
     }
+    // Enemy lunges aimed at us
     for (const o of fightersRef.current) {
       if (o.uid === f.uid || o.state === "dead") continue;
-      if (o.state === "lunge" && Math.abs(o.x - f.x) < LUNGE_DISTANCE + 50 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
-        return { kind: "lunge" as const, o };
+      if (o.state === "lunge" && Math.abs(o.x - f.x) < LUNGE_DISTANCE + 70 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
+        return { kind: "lunge" as const, o, urgent: Math.abs(o.x - f.x) < 120 };
+      }
+      // Enemy winding up a ranged attack at close-ish range = pre-emptive read
+      if ((o.state === "shoot" || o.state === "throw") && Math.abs(o.x - f.x) < 360 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
+        return { kind: "windup" as const, o, urgent: false };
       }
     }
     return null;
   };
+
 
   const triggerReaction = (f: Fighter, kind: "angry" | "chuckle" | "taunt") => {
     const map = { angry: angryIcon.url, chuckle: chuckleIcon.url, taunt: tauntIcon.url };
@@ -322,12 +337,12 @@ function Game() {
         const dyA = f.y - (f.lastAfterY ?? f.y);
         const distA = Math.hypot(dxA, dyA);
         if (distA > 50) {
-          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 3 });
+          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 0.4 });
           f.lastAfterX = f.x; f.lastAfterY = f.y;
-          if (f.afterImages.length > 24) f.afterImages.shift();
+          if (f.afterImages.length > 16) f.afterImages.shift();
         }
       }
-      // Age afterimages (3s lifetime)
+      // Age afterimages (0.4s lifetime each)
       if (f.afterImages.length) {
         for (const a of f.afterImages) a.life -= dt;
         f.afterImages = f.afterImages.filter((a) => a.life > 0);
@@ -402,38 +417,60 @@ function Game() {
           const hpRatio = f.hp / f.maxHp;
           const isDavid = f.type === "david";
 
-          // Reaction-time gated dodge
+          // Reaction-time gated dodge — sharper reads, dodges more often
           if (threat) {
-            if (f.reactionDelay <= 0) {
+            // urgent threats are reacted to almost instantly
+            const ready = threat.urgent ? f.reactionDelay <= 0.05 : f.reactionDelay <= 0;
+            if (ready) {
               if (threat.kind === "proj" && f.onGround && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY; f.jumpCd = 0.4; f.jumpsLeft = 1;
+                // High evasive leap to clear projectiles and gain the high ground
+                const high = Math.random() < 0.5;
+                f.vy = high ? HIGH_JUMP_VELOCITY : JUMP_VELOCITY;
+                f.vx = -f.facing * WALK_SPEED_BASE * 1.2;
+                f.jumpCd = 0.35; f.jumpsLeft = 1;
                 f.lastDodgedFrom = threat.p.ownerUid;
               } else if (threat.kind === "proj" && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY * 0.85; f.jumpCd = 0.3; f.jumpsLeft -= 1;
+                // Air-dodge: double jump + drift away
+                f.vy = JUMP_VELOCITY * 0.9; f.vx = -f.facing * MAX_AIR_SPEED;
+                f.jumpCd = 0.25; f.jumpsLeft -= 1;
+                f.lastDodgedFrom = threat.p.ownerUid;
               } else if (threat.kind === "lunge" && f.onGround && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY * 0.85; f.vx = -f.facing * WALK_SPEED_BASE * 1.8;
-                f.jumpCd = 0.5; f.jumpsLeft = 1; f.lastDodgedFrom = threat.o.uid;
+                // Leap over the lunge or roll back depending on read
+                if (Math.random() < 0.6) { f.vy = HIGH_JUMP_VELOCITY * 0.8; }
+                f.vx = -f.facing * WALK_SPEED_BASE * 2.0;
+                f.jumpCd = 0.4; f.jumpsLeft = 1; f.lastDodgedFrom = threat.o.uid;
+              } else if (threat.kind === "windup" && f.onGround && f.jumpCd <= 0 && Math.random() < 0.5) {
+                // Pre-emptive juke before the shot even fires
+                f.vy = JUMP_VELOCITY * 0.75; f.vx = -f.facing * WALK_SPEED_BASE * 1.4;
+                f.jumpCd = 0.5; f.jumpsLeft = 1;
               }
-              f.reactionDelay = 0.12 + Math.random() * 0.18;
+              f.reactionDelay = 0.06 + Math.random() * 0.12;
             } else {
               f.reactionDelay -= dt;
             }
           }
 
+
           // Battle IQ - intent selection
           if (f.decisionCd <= 0) {
-            f.decisionCd = 0.18 + Math.random() * 0.2;
+            f.decisionCd = 0.14 + Math.random() * 0.16;
             const r = Math.random();
             const enemyBusy = enemy.state === "lunge" || enemy.state === "throw" || enemy.state === "shoot" || enemy.state === "hurt" || enemy.state === "taunt";
             const canAttackSoon = f.abilityCd.some((cd, i) => cd < 0.4 && def.abilities[i].type !== "status");
-            if (enemyBusy && canAttackSoon) f.intent = "punish";
-            else if (hpRatio < 0.28 && r < 0.55) f.intent = "retreat";
-            else if (!canAttackSoon) f.intent = r < 0.5 ? "space" : "bait";
-            else if (r < 0.55) f.intent = "approach";
-            else if (r < 0.8) f.intent = "space";
+            const enemyAirborne = !enemy.onGround && enemy.y < f.y - 60;
+            const enemyHpRatio = enemy.hp / enemy.maxHp;
+            // Read the situation like a real player would
+            if (enemyBusy && canAttackSoon) f.intent = "punish";          // whiff/animation punish
+            else if (enemyAirborne && canAttackSoon) f.intent = "punish"; // anti-air read
+            else if (hpRatio < 0.28 && r < 0.6) f.intent = "retreat";     // survival, reset neutral
+            else if (enemyHpRatio < 0.3 && canAttackSoon && r < 0.7) f.intent = "approach"; // close out the kill
+            else if (!canAttackSoon) f.intent = r < 0.5 ? "space" : "bait"; // stall while on cooldown
+            else if (r < 0.5) f.intent = "approach";
+            else if (r < 0.78) f.intent = "space";
             else f.intent = "bait";
-            f.intentTimer = 0.6 + Math.random() * 0.6;
+            f.intentTimer = 0.5 + Math.random() * 0.6;
           }
+
 
           // ===== Ability decisions (priority order) =====
           const tryUse = (idx: number) => f.abilityCd[idx] <= 0 && f.globalCd <= 0;
@@ -522,19 +559,34 @@ function Game() {
           if (f.x < 90 && move === -1) move = 1;
           if (f.x > w - 90 && move === 1) move = -1;
 
-          // Double jump while aggressing
-          if (aggressive && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0 && Math.random() < 0.02) {
-            f.vy = JUMP_VELOCITY * 0.8; f.jumpsLeft -= 1; f.jumpCd = 0.25;
+          // Double jump while aggressing (chase into the air)
+          if (aggressive && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0 && Math.random() < 0.03) {
+            f.vy = JUMP_VELOCITY * 0.85; f.jumpsLeft -= 1; f.jumpCd = 0.25;
           }
-          // Hop jukes
-          if (f.onGround && f.jumpCd <= 0 && (f.intent === "bait" || f.intent === "space") && Math.random() < 0.006) {
+          // Anti-air leap: enemy is above us — sky-high jump to contest the high ground
+          if (f.intent === "punish" && f.onGround && f.jumpCd <= 0 && !enemy.onGround && enemy.y < f.y - 80) {
+            f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.6; f.jumpsLeft = 1;
+          }
+          // Tactical high jump for positioning / surprise dive-ins
+          if (f.onGround && f.jumpCd <= 0 && aggressive && Math.random() < 0.012) {
+            f.vy = HIGH_JUMP_VELOCITY * 0.9; f.jumpCd = 1.1; f.jumpsLeft = 1;
+          }
+          // Hop jukes when baiting/spacing
+          if (f.onGround && f.jumpCd <= 0 && (f.intent === "bait" || f.intent === "space") && Math.random() < 0.01) {
             f.vy = JUMP_VELOCITY * 0.7; f.jumpCd = 1.0; f.jumpsLeft = 1;
           }
-          if (f.onGround && f.jumpCd <= 0 && aggressive && Math.random() < 0.004) {
-            f.vy = JUMP_VELOCITY; f.jumpCd = 1.2; f.jumpsLeft = 1;
+          // Fast-fall dive when airborne above the enemy and committing
+          if (!f.onGround && f.vy > -120 && aggressive && enemy.y > f.y + 40 && Math.random() < 0.05) {
+            f.vy += FAST_FALL * dt * 8;
           }
 
-          if (move !== 0) {
+          if (!f.onGround) {
+            // Mid-air drift control toward desired movement
+            const target = move * MAX_AIR_SPEED;
+            f.vx += Math.sign(target - f.vx) * AIR_ACCEL * dt;
+            if (Math.abs(f.vx) > MAX_AIR_SPEED) f.vx = Math.sign(f.vx) * MAX_AIR_SPEED;
+            if (f.state !== "lunge") f.state = "walk";
+          } else if (move !== 0) {
             const sp = WALK_SPEED_BASE * def.speed * sandeMult * (f.intent === "retreat" ? 1.2 : 1);
             f.vx = move * sp;
             f.state = "walk";
@@ -544,6 +596,7 @@ function Game() {
             f.state = "idle";
             f.walkPhase *= 0.9;
           }
+
 
           // Opportunistic taunt - 70% chance when an opportunity comes up
           if (f.tauntCd <= 0 && (f.lastDodgedFrom === enemy.uid || f.lastTrickedFrom === enemy.uid) && f.onGround) {
@@ -686,7 +739,7 @@ function Game() {
         {fightersRef.current.flatMap((f) => {
           const def = FIGHTERS[f.type];
           return f.afterImages.map((a, i) => {
-            const alpha = Math.max(0, a.life / 3) * 0.55;
+            const alpha = Math.max(0, a.life / 0.4) * 0.55;
             return (
               <div key={`${f.uid}-a-${i}`} className="absolute pointer-events-none"
                 style={{
