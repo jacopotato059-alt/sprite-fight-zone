@@ -161,7 +161,7 @@ interface Fighter {
   x: number; y: number; vx: number; vy: number;
   hp: number; maxHp: number;
   facing: 1 | -1;
-  state: "idle" | "walk" | "lunge" | "throw" | "shoot" | "hurt" | "dead" | "taunt";
+  state: "idle" | "walk" | "lunge" | "throw" | "shoot" | "hurt" | "dead" | "taunt" | "windup";
   stateTimer: number;
   // per-ability cooldowns (index aligned with FIGHTERS[type].abilities)
   abilityCd: number[];
@@ -178,6 +178,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
@@ -186,6 +187,12 @@ interface Fighter {
   lastAfterX?: number; lastAfterY?: number;
   sandeAttackCd: number;
   shotsLeft: number; shotTimer: number; shotTarget?: number;
+  // Yuji / Sukuna
+  possessed: boolean;
+  windupKind?: "divergent" | "dismantle";
+  windupGrow: number; // 0..1 visual grow/tint progress during windup
+  pendingBlack?: boolean;
+  dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
   tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
@@ -194,10 +201,16 @@ interface Fighter {
   lastTrickedFrom?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
+  pierceLeft?: number; hitUids?: number[];
 }
+interface Effect {
+  uid: number; kind: "bluefire" | "blackflash";
+  x: number; y: number; life: number; maxLife: number; seed: number;
+}
+
 
 const GRAVITY = 2200;
 const GROUND_OFFSET = 30;
