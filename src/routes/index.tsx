@@ -206,7 +206,7 @@ interface Fighter {
   lastTrickedFrom?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
   pierceLeft?: number; hitUids?: number[];
