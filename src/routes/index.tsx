@@ -908,6 +908,7 @@ function Game() {
               f.lungeDamage = dmg;
               f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
               f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              f.punchHitStack = stack;
               if (stack >= 2) {
                 f.punchStacks = 0; f.punchStackTimer = 0;
                 f.abilityCd[1] = 15;
