@@ -1363,6 +1363,9 @@ function Game() {
       life: isDot ? 0.55 : 0.85, maxLife: isDot ? 0.55 : 0.85,
       dmg: finalDmg, crit,
     });
+    if (!isDot) bigHit(finalDmg);
+
+
 
     // ===== Yuji Counter Strike trigger =====
     if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
