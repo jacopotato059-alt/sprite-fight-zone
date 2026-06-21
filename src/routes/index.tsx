@@ -694,14 +694,22 @@ function Game() {
   };
 
   const nearestEnemy = (self: Fighter, all: Fighter[]) => {
-    let best: Fighter | null = null; let bd = Infinity;
+    let best: Fighter | null = null; let bestScore = Infinity;
     for (const o of all) {
       if (o.uid === self.uid || o.state === "dead") continue;
-      const d = Math.abs(o.x - self.x) + Math.abs(o.y - self.y) * 0.3;
-      if (d < bd) { bd = d; best = o; }
+      const dist = Math.abs(o.x - self.x) + Math.abs(o.y - self.y) * 0.3;
+      // Lower score = better target. Smart fighters favor finishable + recovering foes.
+      let score = dist;
+      const oHp = o.hp / o.maxHp;
+      if (oHp < 0.35) score *= 0.55;                 // go for the kill
+      if (o.state === "hurt") score *= 0.7;          // press the advantage
+      if (o.state === "lunge" || o.state === "throw" || o.state === "shoot" || o.state === "taunt") score *= 0.8; // punishable
+      if (!o.onGround) score *= 0.9;                 // catch them landing
+      if (score < bestScore) { bestScore = score; best = o; }
     }
     return best;
   };
+
 
   const fighterCounts = useMemo(() => {
     const m: Record<string, number> = {};
