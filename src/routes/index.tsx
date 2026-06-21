@@ -1117,6 +1117,9 @@ function Game() {
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
       <div className="absolute top-4 right-4 z-30 flex gap-3">
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
+          {debugAi ? "Debug: ON" : "Debug: OFF"}
+        </button>
         <button className="mc-btn danger" onClick={restart}>Restart</button>
       </div>
 
