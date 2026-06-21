@@ -144,7 +144,7 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     id: "yuji", name: "Yuji Itadori", sprite: yujiAsset.url,
     atk: 100, def: 250, speed: 1.3,
     abilities: [
-      { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 10 },
+      { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 3 },
     ],
     width: 64, height: 104,
   },
@@ -679,7 +679,7 @@ function Game() {
                 f.windupKind = "divergent"; f.windupGrow = 0;
                 f.pendingBlack = Math.random() < 0.25; // 25% Black Flash
                 f.vx = 0;
-                f.abilityCd[0] = 10; f.globalCd = 0.3;
+                f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
               }
             } else {
@@ -689,7 +689,7 @@ function Game() {
                 f.windupKind = "dismantle"; f.windupGrow = 0;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                f.abilityCd[0] = 7; f.globalCd = 0.4;
+                f.abilityCd[0] = 4; f.globalCd = 0.4;
                 continue;
               }
             }
@@ -844,8 +844,8 @@ function Game() {
           if (p.kind === "dismantle") {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.knife, 0.7);
-            // Bleed: 2 dmg every 0.7s for 1.5s (2 ticks)
-            t.dots.push({ interval: 0.7, timer: 0.7, ticksLeft: 2, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            // Bleed: 2 dmg every 0.7s for 20 ticks
+            t.dots.push({ interval: 0.7, timer: 0.7, ticksLeft: 20, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
             if ((p.pierceLeft ?? 0) <= 0) return false;
