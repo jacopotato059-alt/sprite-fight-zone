@@ -157,6 +157,16 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     ],
     width: 64, height: 104,
   },
+  deku: {
+    id: "deku", name: "Deku", sprite: dekuAsset.url,
+    atk: 150, def: 350, speed: 1.2,
+    abilities: [
+      { name: "Black Whip", damage: 0, type: "status", cooldown: 6 },
+      { name: "Punch", damage: 8, type: "melee", cooldown: 15 },
+      { name: "Detroit Smash", damage: 56, type: "melee", cooldown: 45 },
+    ],
+    width: 64, height: 104,
+  },
 };
 
 // Sukuna-possessed form (Yuji below 50hp). Not a selectable slot.
