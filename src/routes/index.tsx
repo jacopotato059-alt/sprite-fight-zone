@@ -1891,6 +1891,29 @@ function Game() {
               </div>
             );
           }
+          if (e.kind === "megaring") {
+            const prog = 1 - fade;
+            const size = 80 + prog * 360;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2, width: size, height: size, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(2, 8 * fade)}px solid #3affc5`,
+                  boxShadow: `0 0 ${30 * fade}px #6bd9ff, inset 0 0 ${22 * fade}px rgba(191,245,255,0.9)`,
+                }} />
+                <div className="absolute" style={{
+                  left: "50%", top: "50%",
+                  width: size * 0.55, height: size * 0.55,
+                  borderRadius: "50%",
+                  background: `radial-gradient(circle, rgba(191,245,255,${0.55 * fade}) 0%, rgba(58,255,197,${0.25 * fade}) 50%, rgba(0,0,0,0) 75%)`,
+                  transform: "translate(-50%,-50%)",
+                }} />
+              </div>
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
