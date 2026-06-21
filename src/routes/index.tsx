@@ -51,6 +51,7 @@ const SOUNDS = {
   divergent: sndDivergent.url, blackFlash: sndBlackFlash.url, knife: sndKnife.url,
   sukunaTransform: sndSukunaTransform.url, dismantle1: sndDismantle1.url, dismantle2: sndDismantle2.url,
   crackWhip: sndCrackWhip.url, finishingHit: sndFinishingHit.url, detroitSmash: sndDetroitSmash.url,
+  electric: sndElectric.url,
 };
 
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
