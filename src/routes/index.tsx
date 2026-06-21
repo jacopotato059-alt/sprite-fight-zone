@@ -1171,6 +1171,8 @@ function Game() {
                     ? `brightness(0.4) saturate(2) drop-shadow(0 0 6px #ff5544)`
                     : windupActive
                     ? `brightness(1.15) saturate(1.4) drop-shadow(0 0 ${4 + 12 * f.windupGrow}px #5ec8ff) drop-shadow(0 0 ${6 + 16 * f.windupGrow}px #2aa8ff) hue-rotate(${f.windupGrow * 25}deg)`
+                    : f.counterActive > 0
+                    ? `brightness(1.2) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 18px #e8f4ff)`
                     : f.sandeActive > 0
                     ? `drop-shadow(0 0 10px hsl(${hueAt(timeRef.current)} 100% 60%))`
                     : "drop-shadow(0 4px 0 rgba(0,0,0,0.5))",
@@ -1178,6 +1180,27 @@ function Game() {
                   pointerEvents: "auto",
                 }}
               />
+
+              {/* Counter Strike white particles */}
+              {f.counterActive > 0 && (
+                <div className="absolute inset-0 pointer-events-none">
+                  {Array.from({ length: 10 }).map((_, i) => {
+                    const ang = (i / 10) * Math.PI * 2 + timeRef.current * 3;
+                    const r = 28 + Math.sin(timeRef.current * 6 + i) * 6;
+                    const px = 50 + Math.cos(ang) * r;
+                    const py = 55 + Math.sin(ang) * r * 0.9;
+                    return (
+                      <div key={i} className="absolute" style={{
+                        left: `${px}%`, top: `${py}%`,
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: "#fff",
+                        boxShadow: "0 0 6px #fff, 0 0 12px #e0f0ff",
+                        transform: "translate(-50%,-50%)",
+                      }} />
+                    );
+                  })}
+                </div>
+              )}
 
 
               {/* Gun for David - sits on the side, mirrored opposite */}
