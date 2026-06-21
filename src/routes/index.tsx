@@ -569,10 +569,17 @@ function Game() {
               } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal") {
                 playPitched(SOUNDS.punchHit, 0.75, f.punchPitch ?? 1);
                 spawnEffect("greenfire", hitX, hitY, 0.45);
+                spawnEffect("electric", hitX, hitY, 0.35);
+                playSound(SOUNDS.electric, 0.45);
+                // 2nd-hit background layer = the 1st (lunge) sound
+                if ((f.punchHitStack ?? 0) === 1) {
+                  playSound(SOUNDS.punchLunge, 0.7);
+                }
                 if (f.lungeKind === "dekuFinal") {
                   playSound(SOUNDS.finishingHit, 0.9);
                   spawnEffect("greenfire", hitX + 14, hitY - 10, 0.55);
                   spawnEffect("greenfire", hitX - 12, hitY + 6, 0.55);
+                  spawnEffect("electric", hitX, hitY, 0.55);
                   spawnEffect("counterburst", hitX, hitY, 0.5);
                   t2.vx = f.facing * 980; t2.vy = -520;
                 }
