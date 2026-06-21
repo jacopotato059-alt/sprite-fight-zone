@@ -298,6 +298,7 @@ function Game() {
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       possessed: false, windupGrow: 0, dots: [],
+      stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
 
     });
