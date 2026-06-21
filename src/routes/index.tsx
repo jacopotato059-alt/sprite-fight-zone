@@ -1047,7 +1047,11 @@ function Game() {
       }
 
       // ===== Physics =====
-      f.vy += GRAVITY * dt;
+      if (f.state === "windup" && f.windupKind === "detroit") {
+        f.vy = 0; f.vx = 0; // frozen mid-air during Detroit Smash charge
+      } else {
+        f.vy += GRAVITY * dt;
+      }
       if (f.state !== "lunge") f.x += f.vx * dt;
       f.y += f.vy * dt;
 
