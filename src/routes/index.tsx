@@ -729,12 +729,13 @@ function Game() {
                   }
                 }
               }
-              // ===== Counter Strike: pop the stance when pressured (lunge incoming or close) =====
-              if (tryUse(1) && f.counterActive <= 0 && (
-                (enemy.state === "lunge" && dist < LUNGE_DISTANCE) ||
-                (dist < MELEE_RANGE * 1.6 && Math.random() < 0.5) ||
-                (f.hp / f.maxHp < 0.5 && Math.random() < 0.4)
-              )) {
+              // ===== Counter Strike: only when about to be hit (smarter, less spammy) =====
+              const aboutToBeHit =
+                (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.85) ||
+                (enemy.state === "windup" && dist < LUNGE_DISTANCE) ||
+                (enemy.state === "shoot" && dist < 360) ||
+                (enemy.state === "throw" && dist < 320);
+              if (tryUse(1) && f.counterActive <= 0 && (aboutToBeHit || (f.hp / f.maxHp < 0.35 && dist < MELEE_RANGE * 2 && Math.random() < 0.5))) {
                 f.counterActive = 2.2;
                 f.abilityCd[1] = 5; f.globalCd = 0.2;
                 triggerReaction(f, "angry");
@@ -750,20 +751,23 @@ function Game() {
                 continue;
               }
             } else {
-              // Sukuna — Clash: quick basic projectile, 2s CD
+              // Sukuna — kite at mid-range: if enemy is right on top, prefer space
+              if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
               const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
-              if (tryUse(1) && dist > MELEE_RANGE * 0.5 && dist < w * 0.9) {
+              // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
+              if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
                 f.state = "throw"; f.stateTimer = 0.18;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                const lead = Math.sign(enemy.vx) * Math.min(50, Math.abs(enemy.vx) * 0.12);
+                // Lead the target — better aim
+                const lead = enemy.vx * 0.18;
                 projectilesRef.current.push({
                   uid: nextUid(), ownerUid: f.uid, kind: "clash",
                   x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                  vx: dir * (PROJECTILE_SPEED * 1.3) + lead, vy: 0,
-                  damage: 15, ttl: 1.6,
+                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 0,
+                  damage: 18, ttl: 1.4,
                 });
-                f.abilityCd[1] = 2; f.globalCd = 0.25;
+                f.abilityCd[1] = 2.5; f.globalCd = 0.3;
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
