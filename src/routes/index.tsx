@@ -43,6 +43,8 @@ const SOUNDS = {
   damage: sndDamage.url, punchHit: sndPunchHit.url, throwSwing: sndThrow.url,
   pistol: sndPistol.url, sande: sndSande.url,
   taunt: sndTaunt.url, angry: sndAngry.url, chuckle: sndChuckle.url,
+  divergent: sndDivergent.url, blackFlash: sndBlackFlash.url, knife: sndKnife.url,
+  sukunaTransform: sndSukunaTransform.url, dismantle1: sndDismantle1.url, dismantle2: sndDismantle2.url,
 };
 
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
@@ -68,7 +70,48 @@ function playSoundFade(url: string, holdMs: number, fadeMs: number, volume = 0.6
   }, holdMs);
 }
 
-type FighterTypeId = "dummy" | "david";
+// Web Audio amplified playback so sounds can exceed the 0-1 HTMLAudio cap.
+let __audioCtx: AudioContext | null = null;
+const __bufCache: Record<string, AudioBuffer> = {};
+function getCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  if (!__audioCtx) {
+    try { __audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)(); }
+    catch { return null; }
+  }
+  return __audioCtx;
+}
+function playBoosted(url: string, gain = 8, stopAfterMs?: number) {
+  const ctx = getCtx();
+  if (!ctx) { playSound(url, 1); return; }
+  const start = (buf: AudioBuffer) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g); g.connect(ctx.destination);
+    src.start();
+    if (stopAfterMs) {
+      const t0 = ctx.currentTime + stopAfterMs / 1000;
+      g.gain.setValueAtTime(gain, Math.max(ctx.currentTime, t0 - 0.25));
+      g.gain.linearRampToValueAtTime(0, t0);
+      try { src.stop(t0 + 0.05); } catch {}
+    }
+  };
+  const go = () => {
+    const cached = __bufCache[url];
+    if (cached) { start(cached); return; }
+    fetch(url).then((r) => r.arrayBuffer()).then((a) => ctx.decodeAudioData(a))
+      .then((buf) => { __bufCache[url] = buf; start(buf); })
+      .catch(() => playSound(url, 1));
+  };
+  if (ctx.state === "suspended") ctx.resume().then(go).catch(go);
+  else go();
+}
+
+type FighterTypeId = "dummy" | "david" | "yuji";
+
+
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
 interface FighterDef {
