@@ -222,6 +222,11 @@ interface Fighter {
   tauntCd: number;
   lastDodgedFrom?: number; // uid we just dodged - chance to taunt them
   lastTrickedFrom?: number;
+  // Deku
+  punchStacks?: number;
+  punchStackTimer?: number;
+  punchPitch?: number;
+  whip?: { targetUid: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; tipX?: number };
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
