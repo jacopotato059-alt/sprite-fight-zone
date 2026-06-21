@@ -244,19 +244,30 @@ function Game() {
   }, []);
 
   const incomingThreat = (f: Fighter) => {
+    // Projectiles: react earlier (wider window) and gauge urgency by distance
     for (const p of projectilesRef.current) {
       if (p.ownerUid === f.uid) continue;
       const dx = f.x - p.x;
-      if (Math.sign(p.vx) === Math.sign(dx) && Math.abs(dx) < 320 && Math.abs(p.y - (f.y - 50)) < 90) return { kind: "proj" as const, p };
+      const closing = Math.sign(p.vx) === Math.sign(dx);
+      if (closing && Math.abs(dx) < 420 && Math.abs(p.y - (f.y - 50)) < 110) {
+        const urgent = Math.abs(dx) < 200;
+        return { kind: "proj" as const, p, urgent };
+      }
     }
+    // Enemy lunges aimed at us
     for (const o of fightersRef.current) {
       if (o.uid === f.uid || o.state === "dead") continue;
-      if (o.state === "lunge" && Math.abs(o.x - f.x) < LUNGE_DISTANCE + 50 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
-        return { kind: "lunge" as const, o };
+      if (o.state === "lunge" && Math.abs(o.x - f.x) < LUNGE_DISTANCE + 70 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
+        return { kind: "lunge" as const, o, urgent: Math.abs(o.x - f.x) < 120 };
+      }
+      // Enemy winding up a ranged attack at close-ish range = pre-emptive read
+      if ((o.state === "shoot" || o.state === "throw") && Math.abs(o.x - f.x) < 360 && Math.sign(o.facing) === Math.sign(f.x - o.x)) {
+        return { kind: "windup" as const, o, urgent: false };
       }
     }
     return null;
   };
+
 
   const triggerReaction = (f: Fighter, kind: "angry" | "chuckle" | "taunt") => {
     const map = { angry: angryIcon.url, chuckle: chuckleIcon.url, taunt: tauntIcon.url };
