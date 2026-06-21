@@ -1054,16 +1054,18 @@ function Game() {
               )}
 
               <img
-                src={def.sprite}
-                alt={def.name}
+                src={sprite}
+                alt={displayName}
                 draggable={false}
                 style={{
                   width: "100%", height: "100%",
                   imageRendering: "pixelated", objectFit: "contain",
-                  transform: `scaleX(${f.facing * scaleX}) scaleY(${scaleY})`,
+                  transform: `scaleX(${f.facing * scaleX * grow}) scaleY(${scaleY * grow})`,
                   transformOrigin: "bottom center",
                   filter: f.hitFlash > 0
                     ? `brightness(0.4) saturate(2) drop-shadow(0 0 6px #ff5544)`
+                    : windupActive
+                    ? `brightness(1.15) saturate(1.4) drop-shadow(0 0 ${4 + 12 * f.windupGrow}px #5ec8ff) drop-shadow(0 0 ${6 + 16 * f.windupGrow}px #2aa8ff) hue-rotate(${f.windupGrow * 25}deg)`
                     : f.sandeActive > 0
                     ? `drop-shadow(0 0 10px hsl(${hueAt(timeRef.current)} 100% 60%))`
                     : "drop-shadow(0 4px 0 rgba(0,0,0,0.5))",
@@ -1071,6 +1073,7 @@ function Game() {
                   pointerEvents: "auto",
                 }}
               />
+
 
               {/* Gun for David - sits on the side, mirrored opposite */}
               {showGun && (
