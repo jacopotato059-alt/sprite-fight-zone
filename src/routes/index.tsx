@@ -495,9 +495,45 @@ function Game() {
           }
           f.state = "idle";
           f.lungeFromX = f.lungeToX = f.lungeProgress = undefined;
-          f.lungeHit = false; f.lungeFast = false;
+          f.lungeHit = false; f.lungeFast = false; f.lungeKind = undefined;
           f.bounce = 0.22;
         }
+
+      } else if (f.state === "windup") {
+        // Charging an attack; grow/tint visual progress toward 1
+        f.windupGrow = Math.min(1, f.windupGrow + dt / Math.max(0.06, f.stateTimer + dt));
+        f.vx *= 0.6;
+        if (f.stateTimer <= 0) {
+          if (f.windupKind === "divergent") {
+            // Revert size/tint and lunge forward with the divergent fist
+            f.windupGrow = 0;
+            const black = !!f.pendingBlack;
+            const tgt = nearestEnemy(f, fighters);
+            const dist = tgt ? Math.abs(tgt.x - f.x) : LUNGE_DISTANCE;
+            f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.2;
+            f.lungeFromX = f.x;
+            f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
+            f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+            f.lungeDamage = black ? 65 : 35;
+            f.lungeKind = black ? "divergentBlack" : "divergent";
+            f.pendingBlack = false;
+          } else if (f.windupKind === "dismantle") {
+            // Launch the linear, piercing Dismantle slash
+            const dir = f.facing;
+            projectilesRef.current.push({
+              uid: nextUid(), ownerUid: f.uid, kind: "dismantle",
+              x: f.x + dir * 30, y: f.y - def.height * 0.55,
+              vx: dir * DISMANTLE_SPEED, vy: 0,
+              damage: 25, ttl: 1.4, pierceLeft: 2, hitUids: [],
+            });
+            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
+            f.state = "throw"; f.stateTimer = 0.2;
+          } else {
+            f.state = "idle";
+          }
+          f.windupKind = undefined;
+        }
+
 
       } else if (f.state === "shoot") {
         // Firing bullets sequence
