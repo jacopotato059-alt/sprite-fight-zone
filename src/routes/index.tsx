@@ -117,7 +117,7 @@ function playBoosted(url: string, gain = 8, stopAfterMs?: number) {
   else go();
 }
 
-type FighterTypeId = "dummy" | "david" | "yuji";
+type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 
