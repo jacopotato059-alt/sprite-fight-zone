@@ -557,6 +557,22 @@ function Game() {
               } else if (f.lungeKind === "divergent") {
                 playSound(SOUNDS.divergent, 0.85);
                 spawnEffect("bluefire", hitX, hitY);
+              } else if (f.lungeKind === "detroit") {
+                playSound(SOUNDS.divergent, 1.0);
+                spawnEffect("bluefire", hitX, hitY, 0.6);
+                spawnEffect("counterburst", hitX, hitY, 0.6);
+                t2.vx = f.facing * 1400; t2.vy = -640;
+                t2.stunned = Math.max(t2.stunned, 0.6);
+              } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal") {
+                playPitched(SOUNDS.punchHit, 0.75, f.punchPitch ?? 1);
+                spawnEffect("greenfire", hitX, hitY, 0.45);
+                if (f.lungeKind === "dekuFinal") {
+                  playSound(SOUNDS.finishingHit, 0.9);
+                  spawnEffect("greenfire", hitX + 14, hitY - 10, 0.55);
+                  spawnEffect("greenfire", hitX - 12, hitY + 6, 0.55);
+                  spawnEffect("counterburst", hitX, hitY, 0.5);
+                  t2.vx = f.facing * 980; t2.vy = -520;
+                }
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
