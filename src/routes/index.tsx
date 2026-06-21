@@ -1897,12 +1897,20 @@ function Game() {
           const srcX = f.x;
           const srcY = w.sourceY;
           const tipX = w.tipX ?? srcX;
-          const target = fightersRef.current.find((o) => o.uid === w.targetUid);
-          const tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : srcY;
+          let tipY: number;
+          if (w.mode === "wall") {
+            tipY = w.tipY ?? (w.wallY ?? srcY);
+          } else {
+            const target = fightersRef.current.find((o) => o.uid === w.targetUid);
+            tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : (w.tipY ?? srcY);
+          }
           const dx = tipX - srcX; const dy = tipY - srcY;
           const len = Math.max(1, Math.hypot(dx, dy));
           const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-          const fade = Math.max(0, 1 - w.t / 0.75);
+          const maxLife = w.mode === "wall" ? 0.9 : 0.75;
+          const fade = Math.max(0, 1 - w.t / maxLife);
+          // Crackle along the rope: small sparks every ~24px
+          const sparkCount = Math.min(8, Math.floor(len / 24));
           return (
             <div key={`whip-${f.uid}`} className="absolute pointer-events-none" style={{ left: srcX, top: srcY, opacity: fade }}>
               {/* main rope */}
@@ -1916,6 +1924,27 @@ function Game() {
                 transformOrigin: "0 50%",
                 borderRadius: 2,
               }} />
+              {/* electric crackle running along the rope */}
+              <div style={{
+                position: "absolute", left: 0, top: 0,
+                width: len, height: 1,
+                transform: `rotate(${angle}deg)`,
+                transformOrigin: "0 50%",
+              }}>
+                {Array.from({ length: sparkCount }).map((_, i) => {
+                  const k = (i + 0.5) / sparkCount;
+                  const jitter = Math.sin(timeRef.current * 30 + i * 1.7) * 3;
+                  return (
+                    <div key={i} style={{
+                      position: "absolute",
+                      left: k * len - 2, top: jitter - 2,
+                      width: 4, height: 4, borderRadius: "50%",
+                      background: "#bff5ff",
+                      boxShadow: "0 0 6px #3affc5, 0 0 10px #6bd9ff",
+                    }} />
+                  );
+                })}
+              </div>
               {/* side rope wisps during initial pop (first 0.18s) */}
               {w.t < 0.18 && [-1, 1].map((s) => (
                 <div key={s} style={{
@@ -1929,6 +1958,16 @@ function Game() {
                   borderRadius: 2,
                 }} />
               ))}
+              {/* anchor flare at the rope tip (wall hook) */}
+              {w.mode === "wall" && w.phase === "drag" && (
+                <div style={{
+                  position: "absolute",
+                  left: dx - 8, top: dy - 8,
+                  width: 16, height: 16, borderRadius: "50%",
+                  background: "radial-gradient(circle, #fff 0%, #3affc5 60%, rgba(0,0,0,0) 100%)",
+                  boxShadow: "0 0 12px #3affc5, 0 0 22px #6bd9ff",
+                }} />
+              )}
             </div>
           );
         })}
