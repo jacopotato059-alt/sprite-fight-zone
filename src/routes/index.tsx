@@ -559,19 +559,34 @@ function Game() {
           if (f.x < 90 && move === -1) move = 1;
           if (f.x > w - 90 && move === 1) move = -1;
 
-          // Double jump while aggressing
-          if (aggressive && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0 && Math.random() < 0.02) {
-            f.vy = JUMP_VELOCITY * 0.8; f.jumpsLeft -= 1; f.jumpCd = 0.25;
+          // Double jump while aggressing (chase into the air)
+          if (aggressive && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0 && Math.random() < 0.03) {
+            f.vy = JUMP_VELOCITY * 0.85; f.jumpsLeft -= 1; f.jumpCd = 0.25;
           }
-          // Hop jukes
-          if (f.onGround && f.jumpCd <= 0 && (f.intent === "bait" || f.intent === "space") && Math.random() < 0.006) {
+          // Anti-air leap: enemy is above us — sky-high jump to contest the high ground
+          if (f.intent === "punish" && f.onGround && f.jumpCd <= 0 && !enemy.onGround && enemy.y < f.y - 80) {
+            f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.6; f.jumpsLeft = 1;
+          }
+          // Tactical high jump for positioning / surprise dive-ins
+          if (f.onGround && f.jumpCd <= 0 && aggressive && Math.random() < 0.012) {
+            f.vy = HIGH_JUMP_VELOCITY * 0.9; f.jumpCd = 1.1; f.jumpsLeft = 1;
+          }
+          // Hop jukes when baiting/spacing
+          if (f.onGround && f.jumpCd <= 0 && (f.intent === "bait" || f.intent === "space") && Math.random() < 0.01) {
             f.vy = JUMP_VELOCITY * 0.7; f.jumpCd = 1.0; f.jumpsLeft = 1;
           }
-          if (f.onGround && f.jumpCd <= 0 && aggressive && Math.random() < 0.004) {
-            f.vy = JUMP_VELOCITY; f.jumpCd = 1.2; f.jumpsLeft = 1;
+          // Fast-fall dive when airborne above the enemy and committing
+          if (!f.onGround && f.vy > -120 && aggressive && enemy.y > f.y + 40 && Math.random() < 0.05) {
+            f.vy += FAST_FALL * dt * 8;
           }
 
-          if (move !== 0) {
+          if (!f.onGround) {
+            // Mid-air drift control toward desired movement
+            const target = move * MAX_AIR_SPEED;
+            f.vx += Math.sign(target - f.vx) * AIR_ACCEL * dt;
+            if (Math.abs(f.vx) > MAX_AIR_SPEED) f.vx = Math.sign(f.vx) * MAX_AIR_SPEED;
+            if (f.state !== "lunge") f.state = "walk";
+          } else if (move !== 0) {
             const sp = WALK_SPEED_BASE * def.speed * sandeMult * (f.intent === "retreat" ? 1.2 : 1);
             f.vx = move * sp;
             f.state = "walk";
@@ -581,6 +596,7 @@ function Game() {
             f.state = "idle";
             f.walkPhase *= 0.9;
           }
+
 
           // Opportunistic taunt - 70% chance when an opportunity comes up
           if (f.tauntCd <= 0 && (f.lastDodgedFrom === enemy.uid || f.lastTrickedFrom === enemy.uid) && f.onGround) {
