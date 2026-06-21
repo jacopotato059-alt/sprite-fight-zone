@@ -30,6 +30,7 @@ import dekuAsset from "@/assets/deku.png.asset.json";
 import sndCrackWhip from "@/assets/sounds/crack-the-whip.mp3.asset.json";
 import sndFinishingHit from "@/assets/sounds/finishing-hit.mp3.asset.json";
 import sndDetroitSmash from "@/assets/sounds/detroit-smash.mp3.asset.json";
+import sndElectric from "@/assets/sounds/electricity.mp3.asset.json";
 
 
 export const Route = createFileRoute("/")({
