@@ -1332,9 +1332,18 @@ function Game() {
 
 
   const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
+    // ===== Sukuna passive — Bloodlust: +25% dmg on victims already bleeding from him
+    let inDmg = dmg;
+    if (!isDot && attackerUid) {
+      const att = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att && att.type === "yuji" && att.possessed) {
+        const bleedingFromMe = target.dots.some((d) => d.ownerUid === att.uid);
+        if (bleedingFromMe) inDmg = Math.round(inDmg * 1.25);
+      }
+    }
     // Critical hit: 12% chance on non-dot for +50% dmg
     const crit = !isDot && Math.random() < 0.12;
-    const finalDmg = crit ? Math.round(dmg * 1.5) : dmg;
+    const finalDmg = crit ? Math.round(inDmg * 1.5) : inDmg;
     target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
