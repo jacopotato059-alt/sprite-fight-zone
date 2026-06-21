@@ -228,6 +228,7 @@ interface Fighter {
   punchStacks?: number;
   punchStackTimer?: number;
   punchPitch?: number;
+  punchHitStack?: number;
   whip?: { targetUid: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; tipX?: number };
 }
 interface Projectile {
