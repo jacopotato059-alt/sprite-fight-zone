@@ -1787,6 +1787,53 @@ function Game() {
               </div>
             );
           }
+          if (e.kind === "shockwave") {
+            const prog = 1 - fade; // 0..1 expansion
+            const size = 40 + prog * 220;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 6, width: size, height: size / 3, opacity: fade * 0.95,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(1, 5 * fade)}px solid #bff5ff`,
+                  boxShadow: `0 0 ${20 * fade}px #6bd9ff, inset 0 0 ${16 * fade}px rgba(58,255,197,0.6)`,
+                }} />
+                <div className="absolute inset-2" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(1, 2 * fade)}px solid rgba(255,255,255,${0.9 * fade})`,
+                }} />
+              </div>
+            );
+          }
+          if (e.kind === "wallspark") {
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - 40, top: e.y - 40, width: 80, height: 80, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(180,255,220,0.7) 0%, rgba(58,255,197,0.35) 45%, rgba(0,0,0,0) 70%)",
+                  boxShadow: `0 0 ${18 * fade}px #3affc5`,
+                }} />
+                <svg viewBox="0 0 80 80" className="absolute inset-0" width="80" height="80">
+                  {Array.from({ length: 6 }).map((_, i) => {
+                    const ang = (i / 6) * Math.PI * 2 + e.seed;
+                    const len = 14 + ((e.seed * (i + 1)) % 14) + (1 - fade) * 14;
+                    const ex = 40 + Math.cos(ang) * len;
+                    const ey = 40 + Math.sin(ang) * len;
+                    return (
+                      <path key={i} d={`M40 40 L${ex.toFixed(1)} ${ey.toFixed(1)}`}
+                        stroke="#bff5ff" strokeWidth={2.2} fill="none" strokeLinecap="round"
+                        style={{ filter: `drop-shadow(0 0 ${4 * fade}px #3affc5)` }} />
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
