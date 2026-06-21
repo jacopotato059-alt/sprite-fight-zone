@@ -838,18 +838,36 @@ function Game() {
       if (p.x < -50 || p.x > w + 50 || p.y > groundY + 50) return false;
       for (const t of fighters) {
         if (t.uid === p.ownerUid || t.state === "dead") continue;
+        if (p.kind === "dismantle" && p.hitUids?.includes(t.uid)) continue;
         const tdef = FIGHTERS[t.type];
         if (Math.abs(t.x - p.x) < tdef.width * 0.55 && Math.abs((t.y - tdef.height * 0.5) - p.y) < tdef.height * 0.55) {
-          applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
-          playSound(SOUNDS.damage, 0.45);
-          return false;
+          if (p.kind === "dismantle") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.knife, 0.7);
+            // Bleed: 2 dmg every 0.7s for 1.5s (2 ticks)
+            t.dots.push({ interval: 0.7, timer: 0.7, ticksLeft: 2, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            p.hitUids?.push(t.uid);
+            p.pierceLeft = (p.pierceLeft ?? 1) - 1;
+            if ((p.pierceLeft ?? 0) <= 0) return false;
+          } else {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.damage, 0.45);
+            return false;
+          }
         }
       }
       return true;
     });
 
+    // ===== Effects aging =====
+    if (effectsRef.current.length) {
+      for (const e of effectsRef.current) e.life -= dt;
+      effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
+    }
+
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
+
 
   const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
     target.hp -= dmg;
