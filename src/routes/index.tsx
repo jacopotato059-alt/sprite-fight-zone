@@ -231,6 +231,8 @@ interface Fighter {
   punchHitStack?: number;
   aerialIntent?: number;
   whip?: { mode: "enemy" | "wall"; targetUid?: number; wallX?: number; wallY?: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; dragStartY?: number; tipX?: number; tipY?: number; selfStartX?: number; selfStartY?: number };
+  // Passives
+  passiveUsed?: boolean; // one-shot passives (David Adrenaline, Yuji Second Wind, Dummy Rage)
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
