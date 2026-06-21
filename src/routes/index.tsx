@@ -1461,6 +1461,37 @@ function Game() {
                 </div>
               )}
 
+              {/* Deku ambient electric sparks — intensifies with combo stacks / windups */}
+              {f.type === "deku" && (() => {
+                const stacks = f.punchStacks ?? 0;
+                const charged = stacks > 0 || !!f.whip || (f.state === "windup" && f.windupKind === "detroit");
+                const count = charged ? 8 + stacks * 2 : 4;
+                const intensity = charged ? 1 : 0.5;
+                return (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {Array.from({ length: count }).map((_, i) => {
+                      const ang = (i / count) * Math.PI * 2 + timeRef.current * (2 + stacks);
+                      const r = 22 + Math.sin(timeRef.current * 9 + i * 1.7) * 8;
+                      const px = 50 + Math.cos(ang) * r;
+                      const py = 55 + Math.sin(ang) * r * 0.85;
+                      const flick = (Math.sin(timeRef.current * 22 + i * 3) + 1) * 0.5;
+                      return (
+                        <div key={i} className="absolute" style={{
+                          left: `${px}%`, top: `${py}%`,
+                          width: 3, height: 3, borderRadius: "50%",
+                          background: "#bff5ff",
+                          boxShadow: `0 0 ${4 + flick * 6}px #6bd9ff, 0 0 ${8 + flick * 10}px rgba(58,255,197,${0.5 * intensity})`,
+                          opacity: 0.6 + flick * 0.4 * intensity,
+                          transform: "translate(-50%,-50%)",
+                        }} />
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+
+
 
               {/* Gun for David - sits on the side, mirrored opposite */}
               {showGun && (
