@@ -693,6 +693,38 @@ function Game() {
             }
           } else if (f.type === "yuji") {
             if (!f.possessed) {
+              // ===== Projectile deflection (battle IQ): swat incoming projectiles back =====
+              if (f.globalCd <= 0) {
+                for (const proj of projectilesRef.current) {
+                  if (proj.ownerUid === f.uid) continue;
+                  if (proj.kind === "dismantle") continue; // too fast/large to slap
+                  const ddx = f.x - proj.x;
+                  const closing = Math.sign(proj.vx) === Math.sign(ddx);
+                  if (closing && Math.abs(ddx) < 90 && Math.abs(proj.y - (f.y - def.height * 0.55)) < def.height * 0.6) {
+                    // Deflect: reverse, claim ownership, slight upward arc
+                    proj.vx = -proj.vx * 1.15;
+                    if (proj.kind === "cotton") proj.vy = -180;
+                    proj.ownerUid = f.uid;
+                    f.facing = (Math.sign(-ddx) || f.facing) as 1 | -1;
+                    f.state = "throw"; f.stateTimer = 0.18;
+                    f.globalCd = 0.35;
+                    playSound(SOUNDS.punchHit, 0.55);
+                    triggerReaction(f, "chuckle");
+                    break;
+                  }
+                }
+              }
+              // ===== Counter Strike: pop the stance when pressured (lunge incoming or close) =====
+              if (tryUse(1) && f.counterActive <= 0 && (
+                (enemy.state === "lunge" && dist < LUNGE_DISTANCE) ||
+                (dist < MELEE_RANGE * 1.6 && Math.random() < 0.5) ||
+                (f.hp / f.maxHp < 0.5 && Math.random() < 0.4)
+              )) {
+                f.counterActive = 2.2;
+                f.abilityCd[1] = 5; f.globalCd = 0.2;
+                triggerReaction(f, "angry");
+                continue;
+              }
               // Divergent Fist — fast windup, grows + tints light blue, then lunges
               if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
                 f.state = "windup"; f.stateTimer = 0.12; // faster preparation
