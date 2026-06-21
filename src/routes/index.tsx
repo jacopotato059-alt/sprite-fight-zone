@@ -849,10 +849,30 @@ function Game() {
         const ddx = f.x - o.x;
         const ddy = (f.y - o.y);
         if (Math.abs(ddx) < PUSH_RADIUS && Math.abs(ddy) < 60) {
+          // Body-slam: a fighter launched by Yuji's Counter Strike crashes into another
+          if (f.bodySlamFrom && f.bodySlamFrom !== o.uid && Math.abs(f.vx) > 500) {
+            const slamDmg = f.bodySlamDmg ?? 25;
+            const dir = Math.sign(f.vx) as 1 | -1;
+            applyDamage(o, slamDmg, dir, f.bodySlamFrom);
+            applyDamage(f, Math.round(slamDmg * 0.6), -dir as 1 | -1, f.bodySlamFrom);
+            o.stunned = Math.max(o.stunned, 1);
+            f.stunned = Math.max(f.stunned, 1);
+            o.vx = dir * 500; o.vy = -380;
+            f.vx = -dir * 200; f.vy = -240;
+            spawnEffect("counterburst", (f.x + o.x) / 2, (f.y + o.y) / 2 - 50, 0.5);
+            playSound(SOUNDS.punchHit, 0.9);
+            f.bodySlamFrom = undefined; f.bodySlamDmg = undefined;
+            continue;
+          }
           const push = (PUSH_RADIUS - Math.abs(ddx)) * 6;
           const sign = ddx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ddx);
           f.vx += sign * push * dt;
         }
+      }
+
+      // Clear body-slam flag when fighter lands/slows
+      if (f.bodySlamFrom && (f.onGround || Math.abs(f.vx) < 200)) {
+        f.bodySlamFrom = undefined; f.bodySlamDmg = undefined;
       }
 
       // ===== Physics =====
