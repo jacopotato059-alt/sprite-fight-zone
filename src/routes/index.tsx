@@ -619,6 +619,8 @@ function Game() {
                 spawnEffect("bluefire", hitX, hitY, 0.6);
                 spawnEffect("counterburst", hitX, hitY, 0.6);
                 spawnEffect("electric", hitX, hitY, 0.6);
+                spawnEffect("shockwave", hitX, hitY + 30, 0.55);
+                spawnEffect("shockwave", hitX, hitY + 30, 0.75);
                 playSound(SOUNDS.electric, 0.7);
                 t2.vx = f.facing * 1400; t2.vy = -640;
                 t2.stunned = Math.max(t2.stunned, 0.6);
