@@ -1190,14 +1190,18 @@ function Game() {
 
             {!showStats ? (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <SlotCard selected={selectedSlot === "dummy"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("dummy"); }}
                     sprite={FIGHTERS.dummy.sprite} name="Dummy" />
                   <SlotCard selected={selectedSlot === "david"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("david"); }}
                     sprite={FIGHTERS.david.sprite} name="David Martinez" />
+                  <SlotCard selected={selectedSlot === "yuji"}
+                    onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("yuji"); }}
+                    sprite={FIGHTERS.yuji.sprite} name="Yuji Itadori" />
                 </div>
+
 
                 <div className="mt-6 flex flex-col gap-3 items-center">
                   <button className="mc-btn"
