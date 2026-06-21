@@ -301,8 +301,8 @@ function Game() {
     f.afterImages = [];
     f.afterTimer = 0;
     f.lastAfterX = f.x; f.lastAfterY = f.y;
-    if (withSound === "full") playSound(SOUNDS.sande, 0.55);
-    else playSoundFade(SOUNDS.sande, 700, 300, 0.55);
+    if (withSound === "full") playSound(SOUNDS.sande, 1.0);
+    else playSoundFade(SOUNDS.sande, 700, 300, 1.0);
   };
 
   const step = (dt: number) => {
@@ -362,13 +362,18 @@ function Game() {
               applyDamage(t2, f.lungeDamage ?? def.abilities[0].damage, f.facing, f.uid);
               playSound(SOUNDS.punchHit, 0.7);
               f.lungeHit = true;
+              // Combo follow-up: landing a hit shortens recovery so the AI can keep pressure
+              f.globalCd = Math.min(f.globalCd, 0.12);
+              f.intent = "punish"; f.intentTimer = 0.8;
+              f.tauntedBy = t2.uid; // stay locked on the fighter we're comboing
               break;
             }
           }
         }
         if (p >= 1) {
-          // missed? give target chance to taunt
+          // missed? landing lag + give target chance to taunt (whiff punish window)
           if (!f.lungeHit) {
+            f.globalCd = Math.max(f.globalCd, 0.35);
             const tgt = nearestEnemy(f, fighters);
             if (tgt) { tgt.lastDodgedFrom = f.uid; tauntAt(tgt, f); }
           }
@@ -377,6 +382,7 @@ function Game() {
           f.lungeHit = false; f.lungeFast = false;
           f.bounce = 0.22;
         }
+
       } else if (f.state === "shoot") {
         // Firing bullets sequence
         if (f.shotsLeft > 0) {
@@ -694,14 +700,22 @@ function Game() {
   };
 
   const nearestEnemy = (self: Fighter, all: Fighter[]) => {
-    let best: Fighter | null = null; let bd = Infinity;
+    let best: Fighter | null = null; let bestScore = Infinity;
     for (const o of all) {
       if (o.uid === self.uid || o.state === "dead") continue;
-      const d = Math.abs(o.x - self.x) + Math.abs(o.y - self.y) * 0.3;
-      if (d < bd) { bd = d; best = o; }
+      const dist = Math.abs(o.x - self.x) + Math.abs(o.y - self.y) * 0.3;
+      // Lower score = better target. Smart fighters favor finishable + recovering foes.
+      let score = dist;
+      const oHp = o.hp / o.maxHp;
+      if (oHp < 0.35) score *= 0.55;                 // go for the kill
+      if (o.state === "hurt") score *= 0.7;          // press the advantage
+      if (o.state === "lunge" || o.state === "throw" || o.state === "shoot" || o.state === "taunt") score *= 0.8; // punishable
+      if (!o.onGround) score *= 0.9;                 // catch them landing
+      if (score < bestScore) { bestScore = score; best = o; }
     }
     return best;
   };
+
 
   const fighterCounts = useMemo(() => {
     const m: Record<string, number> = {};
