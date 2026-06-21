@@ -307,8 +307,17 @@ function Game() {
   const restart = useCallback(() => {
     fightersRef.current = [];
     projectilesRef.current = [];
+    effectsRef.current = [];
     playSound(SOUNDS.click, 0.5);
   }, []);
+
+  const spawnEffect = (kind: "bluefire" | "blackflash", x: number, y: number) => {
+    effectsRef.current.push({
+      uid: nextUid(), kind, x, y,
+      life: 0.5, maxLife: 0.5, seed: Math.random() * 1000,
+    });
+  };
+
 
   useEffect(() => {
     let raf = 0;
