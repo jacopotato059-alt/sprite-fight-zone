@@ -640,6 +640,7 @@ function Game() {
             f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
             f.lungeDamage = 56;
             f.lungeKind = "detroit";
+            f.vy = 1400; // dive bomb downward toward target
           } else {
             f.state = "idle";
           }
