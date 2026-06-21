@@ -940,6 +940,11 @@ function Game() {
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
             if ((p.pierceLeft ?? 0) <= 0) return false;
+          } else if (p.kind === "clash") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            playSound(SOUNDS.knife, 0.7);
+            spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.3);
+            return false;
           } else {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.damage, 0.45);
