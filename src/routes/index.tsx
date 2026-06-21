@@ -466,7 +466,16 @@ function Game() {
             if (t2.uid === f.uid || t2.state === "dead") continue;
             if (Math.abs(t2.x - f.x) < MELEE_RANGE * 0.75 && Math.abs(t2.y - f.y) < def.height) {
               applyDamage(t2, f.lungeDamage ?? def.abilities[0].damage, f.facing, f.uid);
-              playSound(SOUNDS.punchHit, 0.7);
+              const hitX = t2.x; const hitY = t2.y - def.height * 0.5;
+              if (f.lungeKind === "divergentBlack") {
+                playSound(SOUNDS.blackFlash, 0.95);
+                spawnEffect("blackflash", hitX, hitY);
+              } else if (f.lungeKind === "divergent") {
+                playSound(SOUNDS.divergent, 0.85);
+                spawnEffect("bluefire", hitX, hitY);
+              } else {
+                playSound(SOUNDS.punchHit, 0.7);
+              }
               f.lungeHit = true;
               // Combo follow-up: landing a hit shortens recovery so the AI can keep pressure
               f.globalCd = Math.min(f.globalCd, 0.12);
@@ -476,6 +485,7 @@ function Game() {
             }
           }
         }
+
         if (p >= 1) {
           // missed? landing lag + give target chance to taunt (whiff punish window)
           if (!f.lungeHit) {
