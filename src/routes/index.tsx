@@ -322,12 +322,12 @@ function Game() {
         const dyA = f.y - (f.lastAfterY ?? f.y);
         const distA = Math.hypot(dxA, dyA);
         if (distA > 50) {
-          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 3 });
+          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 0.4 });
           f.lastAfterX = f.x; f.lastAfterY = f.y;
-          if (f.afterImages.length > 24) f.afterImages.shift();
+          if (f.afterImages.length > 16) f.afterImages.shift();
         }
       }
-      // Age afterimages (3s lifetime)
+      // Age afterimages (0.4s lifetime each)
       if (f.afterImages.length) {
         for (const a of f.afterImages) a.life -= dt;
         f.afterImages = f.afterImages.filter((a) => a.life > 0);
