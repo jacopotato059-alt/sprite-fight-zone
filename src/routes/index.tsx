@@ -199,7 +199,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
-  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "detroit";
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "dekuMega" | "detroit";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
@@ -231,6 +231,8 @@ interface Fighter {
   punchHitStack?: number;
   aerialIntent?: number;
   whip?: { mode: "enemy" | "wall"; targetUid?: number; wallX?: number; wallY?: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; dragStartY?: number; tipX?: number; tipY?: number; selfStartX?: number; selfStartY?: number };
+  // Passives
+  passiveUsed?: boolean; // one-shot passives (David Adrenaline, Yuji Second Wind, Dummy Rage)
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
@@ -239,7 +241,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric" | "shockwave" | "wallspark";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric" | "shockwave" | "wallspark" | "megaring";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
@@ -293,6 +295,8 @@ function Game() {
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
   const sizeRef = useRef({ w: 0, h: 0 });
+  const hitstopRef = useRef(0);
+  const shakeRef = useRef(0);
 
   useEffect(() => {
     const update = () => {
@@ -355,15 +359,41 @@ function Game() {
     });
   };
 
+  // Hitstop = brief slowdown on heavy hits. Shake = arena rumble. Both feel-good polish.
+  const bigHit = (dmg: number) => {
+    if (dmg >= 60) { hitstopRef.current = Math.max(hitstopRef.current, 0.11); shakeRef.current = Math.max(shakeRef.current, 0.45); }
+    else if (dmg >= 45) { hitstopRef.current = Math.max(hitstopRef.current, 0.07); shakeRef.current = Math.max(shakeRef.current, 0.30); }
+    else if (dmg >= 28) { shakeRef.current = Math.max(shakeRef.current, 0.18); }
+  };
+
+
 
   useEffect(() => {
     let raf = 0;
     const loop = (t: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = t;
-      const dt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
+      const rawDt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
       lastTimeRef.current = t;
+      // Hitstop: scale simulation dt for that crunchy heavy-hit pause
+      let dt = rawDt;
+      if (hitstopRef.current > 0) {
+        hitstopRef.current = Math.max(0, hitstopRef.current - rawDt);
+        dt = rawDt * 0.12;
+      }
       timeRef.current += dt;
       step(dt);
+      // Screen shake decay + apply to arena transform
+      if (shakeRef.current > 0) {
+        shakeRef.current = Math.max(0, shakeRef.current - rawDt);
+        if (arenaRef.current) {
+          const mag = shakeRef.current * 18;
+          const ox = (Math.random() - 0.5) * mag;
+          const oy = (Math.random() - 0.5) * mag;
+          arenaRef.current.style.transform = `translate(${ox.toFixed(1)}px, ${oy.toFixed(1)}px)`;
+        }
+      } else if (arenaRef.current && arenaRef.current.style.transform) {
+        arenaRef.current.style.transform = "";
+      }
       forceTick((n) => (n + 1) % 1_000_000);
       raf = requestAnimationFrame(loop);
     };
@@ -624,7 +654,7 @@ function Game() {
                 playSound(SOUNDS.electric, 0.7);
                 t2.vx = f.facing * 1400; t2.vy = -640;
                 t2.stunned = Math.max(t2.stunned, 0.6);
-              } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal") {
+              } else if (f.lungeKind === "deku" || f.lungeKind === "dekuFinal" || f.lungeKind === "dekuMega") {
                 playPitched(SOUNDS.punchHit, 0.75, f.punchPitch ?? 1);
                 spawnEffect("greenfire", hitX, hitY, 0.45);
                 spawnEffect("electric", hitX, hitY, 0.35);
@@ -641,9 +671,26 @@ function Game() {
                   spawnEffect("counterburst", hitX, hitY, 0.5);
                   t2.vx = f.facing * 980; t2.vy = -520;
                 }
+                if (f.lungeKind === "dekuMega") {
+                  // 4th punch — MEGA: bigger sound stack, shockwaves, mega ring, hard launch
+                  playSound(SOUNDS.finishingHit, 1.0);
+                  playSound(SOUNDS.detroitSmash, 0.55);
+                  playSound(SOUNDS.crackWhip, 0.6);
+                  spawnEffect("greenfire", hitX, hitY, 0.7);
+                  spawnEffect("greenfire", hitX + 22, hitY - 14, 0.65);
+                  spawnEffect("greenfire", hitX - 22, hitY + 8, 0.65);
+                  spawnEffect("electric", hitX, hitY, 0.7);
+                  spawnEffect("counterburst", hitX, hitY, 0.7);
+                  spawnEffect("shockwave", hitX, hitY + 24, 0.85);
+                  spawnEffect("megaring", hitX, hitY, 0.7);
+                  spawnEffect("megaring", hitX, hitY, 0.95);
+                  t2.vx = f.facing * 1500; t2.vy = -700;
+                  t2.stunned = Math.max(t2.stunned, 0.7);
+                }
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
+              bigHit(f.lungeDamage ?? def.abilities[0].damage);
               f.lungeHit = true;
               // Combo follow-up: landing a hit shortens recovery so the AI can keep pressure
               f.globalCd = Math.min(f.globalCd, 0.12);
@@ -800,24 +847,27 @@ function Game() {
           }
 
 
-          // Battle IQ - intent selection
+          // Battle IQ - intent selection (faster, smarter decisions)
           if (f.decisionCd <= 0) {
-            f.decisionCd = 0.14 + Math.random() * 0.16;
+            f.decisionCd = 0.10 + Math.random() * 0.12;
             const r = Math.random();
             const enemyBusy = enemy.state === "lunge" || enemy.state === "throw" || enemy.state === "shoot" || enemy.state === "hurt" || enemy.state === "taunt";
+            const enemyWindup = enemy.state === "windup";
             const canAttackSoon = f.abilityCd.some((cd, i) => cd < 0.4 && def.abilities[i].type !== "status");
             const enemyAirborne = !enemy.onGround && enemy.y < f.y - 60;
             const enemyHpRatio = enemy.hp / enemy.maxHp;
             // Read the situation like a real player would
-            if (enemyBusy && canAttackSoon) f.intent = "punish";          // whiff/animation punish
+            if (enemyWindup && canAttackSoon && dist < LUNGE_DISTANCE * 1.2) f.intent = "punish"; // punish telegraphs
+            else if (enemyBusy && canAttackSoon) f.intent = "punish";          // whiff/animation punish
             else if (enemyAirborne && canAttackSoon) f.intent = "punish"; // anti-air read
-            else if (hpRatio < 0.28 && r < 0.6) f.intent = "retreat";     // survival, reset neutral
-            else if (enemyHpRatio < 0.3 && canAttackSoon && r < 0.7) f.intent = "approach"; // close out the kill
+            else if (hpRatio < 0.22 && r < 0.55) f.intent = "retreat";     // only retreat when truly low
+            else if (hpRatio < 0.45 && threat && r < 0.45) f.intent = "space"; // create breathing room
+            else if (enemyHpRatio < 0.3 && canAttackSoon && r < 0.78) f.intent = "approach"; // close out the kill
             else if (!canAttackSoon) f.intent = r < 0.5 ? "space" : "bait"; // stall while on cooldown
-            else if (r < 0.5) f.intent = "approach";
-            else if (r < 0.78) f.intent = "space";
+            else if (r < 0.55) f.intent = "approach";
+            else if (r < 0.8) f.intent = "space";
             else f.intent = "bait";
-            f.intentTimer = 0.5 + Math.random() * 0.6;
+            f.intentTimer = 0.4 + Math.random() * 0.5; // shorter — re-evaluate sooner
           }
 
 
@@ -913,7 +963,7 @@ function Game() {
               const wantsAerial = f.onGround && f.aerialIntent <= 0 && f.jumpCd <= 0
                 && (f.intent === "bait" || f.intent === "space" || hpRatio < 0.45)
                 && dist > MELEE_RANGE * 1.2
-                && Math.random() < 0.025;
+                && Math.random() < 0.012;
               if (wantsAerial) f.aerialIntent = 2.2;
               if ((f.aerialIntent ?? 0) > 0 && f.onGround) {
                 // Sprint to the closer wall, then backflip toward enemy
@@ -947,19 +997,33 @@ function Game() {
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
               const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
               // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
+              // Sub-variant: "Twin Clash" — when enemy is busy/airborne, fire a high+low pair
               if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
                 f.state = "throw"; f.stateTimer = 0.18;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                // Lead the target — better aim
                 const lead = enemy.vx * 0.18;
+                const twin = (enemy.state === "lunge" || enemy.state === "shoot" || !enemy.onGround) && Math.random() < 0.55;
+                const baseY = f.y - def.height * 0.55;
                 projectilesRef.current.push({
                   uid: nextUid(), ownerUid: f.uid, kind: "clash",
-                  x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 0,
+                  x: f.x + dir * 28, y: twin ? baseY - 22 : baseY,
+                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: twin ? -60 : 0,
                   damage: 18, ttl: 1.4,
                 });
-                f.abilityCd[1] = 2.5; f.globalCd = 0.3;
+                if (twin) {
+                  projectilesRef.current.push({
+                    uid: nextUid(), ownerUid: f.uid, kind: "clash",
+                    x: f.x + dir * 28, y: baseY + 22,
+                    vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 60,
+                    damage: 14, ttl: 1.4,
+                  });
+                  f.abilityCd[1] = 3.5; // slightly longer for the twin
+                  triggerReaction(f, "chuckle");
+                } else {
+                  f.abilityCd[1] = 2.5;
+                }
+                f.globalCd = 0.3;
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
@@ -1033,33 +1097,55 @@ function Game() {
               spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
-            // Punch combo (idx 1): chains 3 hits, finisher total cooldown = 4s
+            // Punch combo (idx 1): chains 4 hits. dmgs: 34, 45, 59, 67 (mega).
             if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
-              const stack = f.punchStacks ?? 0;
-              const base = 8;
-              const dmg = stack === 0 ? base : stack === 1 ? Math.round(base * 1.2) : Math.round(base * 1.2 * 1.6);
-              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+              const stack = f.punchStacks ?? 0; // 0..3
+              const DMG = [34, 45, 59, 67];
+              const dmg = DMG[Math.min(3, stack)];
+              const isMega = stack === 3;
+              const isFinalish = stack >= 2;
+              const reach = isMega ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE;
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / (isMega ? 2.2 : 2.5);
               f.lungeFromX = f.x;
-              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
+              f.lungeToX = f.x + f.facing * Math.min(reach, dist + (isMega ? 50 : 30));
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
               f.lungeDamage = dmg;
-              f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
-              f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              f.lungeKind = isMega ? "dekuMega" : isFinalish ? "dekuFinal" : "deku";
+              f.punchPitch = Math.max(0.5, 1 - stack * 0.13);
               f.punchHitStack = stack;
-              if (stack >= 2) {
+              if (stack >= 3) {
+                // 4th finisher — full reset, total CD = 4s
                 f.punchStacks = 0; f.punchStackTimer = 0;
                 f.abilityCd[1] = 4;
               } else {
                 f.punchStacks = stack + 1;
-                f.punchStackTimer = 2.0;
-                f.abilityCd[1] = 0.6;
+                f.punchStackTimer = 2.2;
+                f.abilityCd[1] = 0.45;
               }
-              f.globalCd = 0.18;
-              playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
+              f.globalCd = isMega ? 0.28 : 0.18;
+              playPitched(SOUNDS.punchLunge, isMega ? 0.75 : 0.55, f.punchPitch);
+              if (isMega) {
+                // One For All Surge windup spark
+                spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.35);
+                spawnEffect("greenfire", f.x, f.y - def.height * 0.55, 0.4);
+              }
               continue;
             }
           } else {
-            // Dummy abilities
+            // Dummy abilities — with "Rage" sub-variant when low HP
+            const dummyRage = hpRatio < 0.35;
+            // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
+            if (dummyRage && tryUse(0) && dist < LUNGE_DISTANCE * 1.4 && dist > MELEE_RANGE * 0.3) {
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION * 0.85;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE * 1.3, dist + 50);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = 36;
+              f.abilityCd[0] = 1.1; f.globalCd = 0.35;
+              playSound(SOUNDS.punchLunge, 0.65);
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
+              continue;
+            }
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION;
               f.lungeFromX = f.x;
@@ -1276,9 +1362,18 @@ function Game() {
 
 
   const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
+    // ===== Sukuna passive — Bloodlust: +25% dmg on victims already bleeding from him
+    let inDmg = dmg;
+    if (!isDot && attackerUid) {
+      const att = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att && att.type === "yuji" && att.possessed) {
+        const bleedingFromMe = target.dots.some((d) => d.ownerUid === att.uid);
+        if (bleedingFromMe) inDmg = Math.round(inDmg * 1.25);
+      }
+    }
     // Critical hit: 12% chance on non-dot for +50% dmg
     const crit = !isDot && Math.random() < 0.12;
-    const finalDmg = crit ? Math.round(dmg * 1.5) : dmg;
+    const finalDmg = crit ? Math.round(inDmg * 1.5) : inDmg;
     target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
@@ -1298,6 +1393,9 @@ function Game() {
       life: isDot ? 0.55 : 0.85, maxLife: isDot ? 0.55 : 0.85,
       dmg: finalDmg, crit,
     });
+    if (!isDot) bigHit(finalDmg);
+
+
 
     // ===== Yuji Counter Strike trigger =====
     if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
@@ -1326,6 +1424,43 @@ function Game() {
         playSound(SOUNDS.divergent, 0.6);
         triggerReaction(target, "chuckle");
         return;
+      }
+    }
+
+    // ===== Passives — one-shot triggers when first crossing 30% HP =====
+    if (!isDot && target.hp > 0 && !target.passiveUsed) {
+      const ratio = target.hp / target.maxHp;
+      if (ratio < 0.30) {
+        if (target.type === "david") {
+          // Adrenaline: free 1.6s Sandevistan + reset shot CD
+          target.passiveUsed = true;
+          startSande(target, 1.6, "short");
+          target.abilityCd[1] = Math.min(target.abilityCd[1] ?? 0, 0.4);
+          triggerReaction(target, "angry");
+          shakeRef.current = Math.max(shakeRef.current, 0.25);
+        } else if (target.type === "yuji" && !target.possessed) {
+          // Second Wind: heal 25 HP
+          target.passiveUsed = true;
+          target.hp = Math.min(target.maxHp, target.hp + 25);
+          triggerReaction(target, "angry");
+          spawnEffect("counterburst", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.5);
+        } else if (target.type === "deku") {
+          // Plus Ultra: jumpstart the punch combo to stack 2 and refresh CDs
+          target.passiveUsed = true;
+          target.punchStacks = Math.max(target.punchStacks ?? 0, 2);
+          target.punchStackTimer = 3.0;
+          target.abilityCd[0] = 0; target.abilityCd[1] = 0;
+          spawnEffect("electric", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.55);
+          spawnEffect("greenfire", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.45);
+          triggerReaction(target, "angry");
+        } else if (target.type === "dummy") {
+          // Rage: brief invuln-style stun-cleanse + reset attack CD for a comeback swing
+          target.passiveUsed = true;
+          target.stunned = 0;
+          target.abilityCd[0] = 0;
+          target.bounce = 0.4;
+          triggerReaction(target, "angry");
+        }
       }
     }
 
@@ -1591,8 +1726,9 @@ function Game() {
               {f.type === "deku" && (() => {
                 const stacks = f.punchStacks ?? 0;
                 const charged = stacks > 0 || !!f.whip || (f.state === "windup" && f.windupKind === "detroit");
-                const count = charged ? 8 + stacks * 2 : 4;
-                const intensity = charged ? 1 : 0.5;
+                const surge = stacks >= 3; // One For All Surge — about to fire mega
+                const count = surge ? 18 : charged ? 8 + stacks * 2 : 4;
+                const intensity = surge ? 1.6 : charged ? 1 : 0.5;
                 return (
                   <div className="absolute inset-0 pointer-events-none">
                     {Array.from({ length: count }).map((_, i) => {
@@ -1831,6 +1967,29 @@ function Game() {
                     );
                   })}
                 </svg>
+              </div>
+            );
+          }
+          if (e.kind === "megaring") {
+            const prog = 1 - fade;
+            const size = 80 + prog * 360;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2, width: size, height: size, opacity: fade,
+                mixBlendMode: "screen",
+              }}>
+                <div className="absolute inset-0" style={{
+                  borderRadius: "50%",
+                  border: `${Math.max(2, 8 * fade)}px solid #3affc5`,
+                  boxShadow: `0 0 ${30 * fade}px #6bd9ff, inset 0 0 ${22 * fade}px rgba(191,245,255,0.9)`,
+                }} />
+                <div className="absolute" style={{
+                  left: "50%", top: "50%",
+                  width: size * 0.55, height: size * 0.55,
+                  borderRadius: "50%",
+                  background: `radial-gradient(circle, rgba(191,245,255,${0.55 * fade}) 0%, rgba(58,255,197,${0.25 * fade}) 50%, rgba(0,0,0,0) 75%)`,
+                  transform: "translate(-50%,-50%)",
+                }} />
               </div>
             );
           }
