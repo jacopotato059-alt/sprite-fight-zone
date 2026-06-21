@@ -972,31 +972,66 @@ function Game() {
               }
             }
           } else if (f.type === "deku") {
-            // Detroit Smash (idx 2): air-only finisher
+            const hpLow = hpRatio < 0.45;
+            const heavyThreat = !!threat && (threat.urgent || (threat.kind === "windup"));
+            const wantsRetreat = f.intent === "retreat" || (hpLow && heavyThreat);
+
+            // === Wall-Whip retreat (sub-variant of Black Whip) ===
+            // Ropes to the nearest wall and yanks Deku up into the air for aerial reset.
+            if (tryUse(0) && !f.whip && f.onGround && wantsRetreat && dist < w) {
+              const wallDir: 1 | -1 = (f.x < w / 2 ? -1 : 1);
+              const wallX = wallDir === -1 ? 24 : w - 24;
+              const wallY = groundY - 220;
+              f.state = "throw"; f.stateTimer = 0.95; f.vx = 0;
+              f.whip = { mode: "wall", wallX, wallY, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.facing = wallDir;
+              f.abilityCd[0] = 6; f.globalCd = 0.4;
+              playSound(SOUNDS.punchLunge, 0.55);
+              playSound(SOUNDS.electric, 0.45);
+              spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.35);
+              triggerReaction(f, "chuckle");
+              continue;
+            }
+
+            // Detroit Smash (idx 2): air-only finisher — prioritized after a whip pull (combo)
             if (tryUse(2) && !f.onGround && f.y < groundY - 140 && dist < w * 0.95) {
               f.state = "windup"; f.stateTimer = 2.0;
               f.windupKind = "detroit"; f.windupGrow = 0;
               f.vx = 0; f.vy = 0;
               f.abilityCd[2] = 45; f.globalCd = 0.6;
               playSound(SOUNDS.detroitSmash, 0.9);
+              spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.6);
               triggerReaction(f, "angry");
               continue;
             }
-            // Tactical jump if Detroit Smash is ready & we're grounded
-            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2 && Math.random() < 0.04) {
+            // Tactical jump to set up Detroit Smash when ready
+            if (tryUse(2) && f.onGround && f.jumpCd <= 0 && dist < LUNGE_DISTANCE * 2.2 && Math.random() < 0.06) {
               f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.8; f.jumpsLeft = 1;
             }
-            // Black Whip (idx 0): pull enemy in to set up combo
+
+            // === Air-Whip juggle (sub-variant of Black Whip used while airborne) ===
+            // Drags target upward to Deku's altitude for aerial combos.
+            if (tryUse(0) && !f.whip && !f.onGround && dist < w * 0.7 && f.vy > -200) {
+              f.state = "throw"; f.stateTimer = 0.6;
+              f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.abilityCd[0] = 6; f.globalCd = 0.35;
+              playSound(SOUNDS.punchLunge, 0.55);
+              playSound(SOUNDS.electric, 0.5);
+              spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.4);
+              continue;
+            }
+
+            // Ground Black Whip (idx 0): pull enemy in to set up combo
             if (tryUse(0) && !f.whip && dist > MELEE_RANGE * 1.1 && dist < w * 0.85) {
               f.state = "throw"; f.stateTimer = 0.75; f.vx = 0;
-              f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+              f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
               f.abilityCd[0] = 6; f.globalCd = 0.4;
-              playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              playSound(SOUNDS.punchLunge, 0.6);
               playSound(SOUNDS.electric, 0.5);
               spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
-            // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
+            // Punch combo (idx 1): chains 3 hits, finisher total cooldown = 4s
             if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
               const stack = f.punchStacks ?? 0;
               const base = 8;
@@ -1011,11 +1046,11 @@ function Game() {
               f.punchHitStack = stack;
               if (stack >= 2) {
                 f.punchStacks = 0; f.punchStackTimer = 0;
-                f.abilityCd[1] = 15;
+                f.abilityCd[1] = 4;
               } else {
                 f.punchStacks = stack + 1;
                 f.punchStackTimer = 2.0;
-                f.abilityCd[1] = 0.8;
+                f.abilityCd[1] = 0.6;
               }
               f.globalCd = 0.18;
               playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
