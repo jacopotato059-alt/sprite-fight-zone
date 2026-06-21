@@ -685,10 +685,12 @@ function Game() {
               startSande(f, 3, "full");
               f.abilityCd[0] = 12; f.globalCd = 0.3;
             }
-            // Shots Fired ranged
-            else if (tryUse(1) && dist > MELEE_RANGE * 1.1 && dist < w * 0.95) {
+            // Shots Fired ranged — only at a safe distance, aim at enemy center
+            else if (tryUse(1) && dist > MELEE_RANGE * 1.4 && dist < w * 0.95) {
+              const edef = FIGHTERS[enemy.type];
               f.state = "shoot"; f.stateTimer = 0.55;
               f.shotsLeft = 3; f.shotTimer = 0;
+              f.shotTarget = enemy.y - edef.height * 0.55;
               f.abilityCd[1] = 5; f.globalCd = 0.5;
               continue;
             }
