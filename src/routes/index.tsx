@@ -1647,8 +1647,9 @@ function Game() {
               {f.type === "deku" && (() => {
                 const stacks = f.punchStacks ?? 0;
                 const charged = stacks > 0 || !!f.whip || (f.state === "windup" && f.windupKind === "detroit");
-                const count = charged ? 8 + stacks * 2 : 4;
-                const intensity = charged ? 1 : 0.5;
+                const surge = stacks >= 3; // One For All Surge — about to fire mega
+                const count = surge ? 18 : charged ? 8 + stacks * 2 : 4;
+                const intensity = surge ? 1.6 : charged ? 1 : 0.5;
                 return (
                   <div className="absolute inset-0 pointer-events-none">
                     {Array.from({ length: count }).map((_, i) => {
