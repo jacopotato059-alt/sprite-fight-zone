@@ -314,16 +314,19 @@ function Game() {
 
       const sandeMult = f.sandeActive > 0 ? 3 : 1;
 
-      // Sandevistan afterimage emitter ~ 7/s (5 per 0.7s)
+      // Sandevistan afterimage trail - emit by distance (~1m = 50px) for true trail feel
       if (f.sandeActive > 0) {
-        f.afterTimer -= dt;
-        if (f.afterTimer <= 0) {
-          f.afterTimer = 0.14;
-          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 0.45 });
-          if (f.afterImages.length > 8) f.afterImages.shift();
+        if (f.lastAfterX === undefined) { f.lastAfterX = f.x; f.lastAfterY = f.y; }
+        const dxA = f.x - (f.lastAfterX ?? f.x);
+        const dyA = f.y - (f.lastAfterY ?? f.y);
+        const distA = Math.hypot(dxA, dyA);
+        if (distA > 50) {
+          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 3 });
+          f.lastAfterX = f.x; f.lastAfterY = f.y;
+          if (f.afterImages.length > 24) f.afterImages.shift();
         }
       }
-      // Age afterimages
+      // Age afterimages (3s lifetime)
       if (f.afterImages.length) {
         for (const a of f.afterImages) a.life -= dt;
         f.afterImages = f.afterImages.filter((a) => a.life > 0);
