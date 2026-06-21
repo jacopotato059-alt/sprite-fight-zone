@@ -26,6 +26,10 @@ import sndKnife from "@/assets/sounds/knife-slash.mp3.asset.json";
 import sndSukunaTransform from "@/assets/sounds/sukuna-transform.mp3.asset.json";
 import sndDismantle1 from "@/assets/sounds/dismantle-1.mp3.asset.json";
 import sndDismantle2 from "@/assets/sounds/dismantle-2.mp3.asset.json";
+import dekuAsset from "@/assets/deku.png.asset.json";
+import sndCrackWhip from "@/assets/sounds/crack-the-whip.mp3.asset.json";
+import sndFinishingHit from "@/assets/sounds/finishing-hit.mp3.asset.json";
+import sndDetroitSmash from "@/assets/sounds/detroit-smash.mp3.asset.json";
 
 
 export const Route = createFileRoute("/")({
