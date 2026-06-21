@@ -60,6 +60,9 @@ function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
     return a;
   } catch { return null; }
 }
+function playPitched(url: string, volume = 0.6, rate = 1): HTMLAudioElement | null {
+  try { const a = new Audio(url); a.volume = volume; a.playbackRate = rate; void a.play(); return a; } catch { return null; }
+}
 function playSoundFade(url: string, holdMs: number, fadeMs: number, volume = 0.6) {
   const a = playSound(url, volume);
   if (!a) return;
