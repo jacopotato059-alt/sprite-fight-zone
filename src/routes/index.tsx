@@ -673,7 +673,7 @@ function Game() {
         {fightersRef.current.flatMap((f) => {
           const def = FIGHTERS[f.type];
           return f.afterImages.map((a, i) => {
-            const alpha = Math.max(0, a.life / 0.45) * 0.55;
+            const alpha = Math.max(0, a.life / 3) * 0.55;
             return (
               <div key={`${f.uid}-a-${i}`} className="absolute pointer-events-none"
                 style={{
