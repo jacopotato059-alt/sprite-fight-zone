@@ -781,21 +781,40 @@ function Game() {
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
 
-  const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number) => {
+  const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
     target.hp -= dmg;
-    target.hitFlash = 0.25;
-    target.bounce = 0.3;
-    target.vx = fromFacing * 260;
-    target.vy = -300;
-    target.state = "hurt";
-    target.stateTimer = 0.32;
+    target.hitFlash = isDot ? 0.15 : 0.25;
+    if (!isDot) {
+      target.bounce = 0.3;
+      target.vx = fromFacing * 260;
+      target.vy = -300;
+      target.state = "hurt";
+      target.stateTimer = 0.32;
+    }
+
+    // ===== Yuji → Sukuna transformation (about to die at 50 or less HP) =====
+    if (target.type === "yuji" && !target.possessed && target.hp <= 50) {
+      target.possessed = true;
+      target.maxHp = SUKUNA_MAX_HP;
+      target.hp = SUKUNA_MAX_HP;
+      target.state = "idle";
+      target.stateTimer = 0;
+      target.dots = [];
+      target.abilityCd = [0];
+      target.globalCd = 0.5;
+      target.bounce = 0.4;
+      playSound(SOUNDS.sukunaTransform, 1.0);
+      triggerReaction(target, "angry");
+      return;
+    }
+
     if (target.hp <= 0) {
       target.hp = 0;
       target.state = "dead";
     } else {
-      playSound(SOUNDS.damage, 0.4);
+      if (!isDot) playSound(SOUNDS.damage, 0.4);
       // Attacker may chuckle on hit (low chance) and target gets angry
-      if (attackerUid) {
+      if (attackerUid && !isDot) {
         const att = fightersRef.current.find((x) => x.uid === attackerUid);
         if (att && Math.random() < 0.3 && att.tauntCd <= 0) {
           triggerReaction(att, "chuckle"); att.tauntCd = 2 + Math.random() * 2;
@@ -804,6 +823,7 @@ function Game() {
       }
     }
   };
+
 
   const nearestEnemy = (self: Fighter, all: Fighter[]) => {
     let best: Fighter | null = null; let bestScore = Infinity;
