@@ -1460,7 +1460,30 @@ function Game() {
             </div>
           );
         })}
+
+        {/* Floating damage numbers */}
+        {damageNumsRef.current.map((n) => {
+          const fade = Math.min(1, n.life / n.maxLife);
+          const size = n.crit ? 18 : 12;
+          return (
+            <div key={n.uid} className="absolute pointer-events-none" style={{
+              left: n.x, top: n.y,
+              transform: `translate(-50%,-50%) scale(${n.crit ? 1 + (1 - fade) * 0.3 : 1})`,
+              fontFamily: "Chakra Petch", fontWeight: 800,
+              fontSize: size,
+              color: n.crit ? "#fff35a" : "#fff",
+              textShadow: n.crit
+                ? "0 0 6px #ff5a3a, 1px 1px 0 #000, -1px -1px 0 #000"
+                : "1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000",
+              opacity: fade,
+              whiteSpace: "nowrap",
+            }}>
+              {n.crit ? `${n.dmg}!` : n.dmg}
+            </div>
+          );
+        })}
       </div>
+
 
 
       {showFighters && (
