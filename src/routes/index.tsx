@@ -628,6 +628,18 @@ function Game() {
             });
             playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
             f.state = "throw"; f.stateTimer = 0.2;
+          } else if (f.windupKind === "detroit") {
+            // Air freeze ended — dive at nearest enemy with massive force
+            const tgt = nearestEnemy(f, fighters);
+            const distT = tgt ? Math.abs(tgt.x - f.x) : LUNGE_DISTANCE;
+            const dir = tgt ? ((Math.sign(tgt.x - f.x) || f.facing) as 1 | -1) : f.facing;
+            f.facing = dir;
+            f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+            f.lungeFromX = f.x;
+            f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE * 1.6, distT + 80);
+            f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+            f.lungeDamage = 56;
+            f.lungeKind = "detroit";
           } else {
             f.state = "idle";
           }
