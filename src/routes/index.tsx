@@ -317,6 +317,7 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    damageNumsRef.current = [];
     playSound(SOUNDS.click, 0.5);
   }, []);
 
