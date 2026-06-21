@@ -145,6 +145,7 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     atk: 100, def: 250, speed: 1.3,
     abilities: [
       { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 3 },
+      { name: "Counter Strike", damage: 8, type: "status", cooldown: 5 },
     ],
     width: 64, height: 104,
   },
@@ -193,6 +194,10 @@ interface Fighter {
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
+  stunned: number; // seconds locked out of AI/actions
+  counterActive: number; // Yuji Counter Strike window
+  bodySlamFrom?: number; // uid that launched us as a body slam projectile
+  bodySlamDmg?: number;
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
   tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
@@ -207,7 +212,7 @@ interface Projectile {
   pierceLeft?: number; hitUids?: number[];
 }
 interface Effect {
-  uid: number; kind: "bluefire" | "blackflash";
+  uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst";
   x: number; y: number; life: number; maxLife: number; seed: number;
 }
 
@@ -293,6 +298,7 @@ function Game() {
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       possessed: false, windupGrow: 0, dots: [],
+      stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
 
     });
@@ -312,10 +318,10 @@ function Game() {
     playSound(SOUNDS.click, 0.5);
   }, []);
 
-  const spawnEffect = (kind: "bluefire" | "blackflash", x: number, y: number) => {
+  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5) => {
     effectsRef.current.push({
       uid: nextUid(), kind, x, y,
-      life: 0.5, maxLife: 0.5, seed: Math.random() * 1000,
+      life, maxLife: life, seed: Math.random() * 1000,
     });
   };
 
@@ -418,20 +424,34 @@ function Game() {
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
+      f.stunned = Math.max(0, f.stunned - dt);
+      f.counterActive = Math.max(0, f.counterActive - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       // ===== Damage-over-time (Sukuna Dismantle bleed) =====
       if (f.dots.length) {
         for (const d of f.dots) {
           d.timer -= dt;
-          if (d.timer <= 0 && d.ticksLeft > 0) {
+          // Multiple ticks may fire in a single frame given the 0.1s interval
+          let safety = 8;
+          while (d.timer <= 0 && d.ticksLeft > 0 && safety-- > 0) {
             d.timer += d.interval;
             d.ticksLeft -= 1;
             applyDamage(f, d.dmg, d.fromFacing, d.ownerUid, true);
-            playSound(SOUNDS.knife, 0.6);
+            playSound(SOUNDS.knife, 0.35);
+            // Bleed stuns the victim while it ticks + spawns a cut/blood puff
+            f.stunned = Math.max(f.stunned, d.interval + 0.08);
+            const tdef = FIGHTERS[f.type];
+            spawnEffect("cut", f.x + (Math.random() - 0.5) * tdef.width * 0.6, f.y - tdef.height * (0.3 + Math.random() * 0.5), 0.35);
           }
         }
         f.dots = f.dots.filter((d) => d.ticksLeft > 0);
+      }
+
+      // ===== Stun lockout — skip AI/movement while stunned =====
+      if (f.stunned > 0 && f.state !== "lunge" && f.state !== "windup") {
+        f.vx *= 0.7;
+        if (f.state !== "hurt") { f.state = "hurt"; f.stateTimer = Math.max(f.stateTimer, f.stunned); }
       }
 
 
@@ -673,6 +693,38 @@ function Game() {
             }
           } else if (f.type === "yuji") {
             if (!f.possessed) {
+              // ===== Projectile deflection (battle IQ): swat incoming projectiles back =====
+              if (f.globalCd <= 0) {
+                for (const proj of projectilesRef.current) {
+                  if (proj.ownerUid === f.uid) continue;
+                  if (proj.kind === "dismantle") continue; // too fast/large to slap
+                  const ddx = f.x - proj.x;
+                  const closing = Math.sign(proj.vx) === Math.sign(ddx);
+                  if (closing && Math.abs(ddx) < 90 && Math.abs(proj.y - (f.y - def.height * 0.55)) < def.height * 0.6) {
+                    // Deflect: reverse, claim ownership, slight upward arc
+                    proj.vx = -proj.vx * 1.15;
+                    if (proj.kind === "cotton") proj.vy = -180;
+                    proj.ownerUid = f.uid;
+                    f.facing = (Math.sign(-ddx) || f.facing) as 1 | -1;
+                    f.state = "throw"; f.stateTimer = 0.18;
+                    f.globalCd = 0.35;
+                    playSound(SOUNDS.punchHit, 0.55);
+                    triggerReaction(f, "chuckle");
+                    break;
+                  }
+                }
+              }
+              // ===== Counter Strike: pop the stance when pressured (lunge incoming or close) =====
+              if (tryUse(1) && f.counterActive <= 0 && (
+                (enemy.state === "lunge" && dist < LUNGE_DISTANCE) ||
+                (dist < MELEE_RANGE * 1.6 && Math.random() < 0.5) ||
+                (f.hp / f.maxHp < 0.5 && Math.random() < 0.4)
+              )) {
+                f.counterActive = 2.2;
+                f.abilityCd[1] = 5; f.globalCd = 0.2;
+                triggerReaction(f, "angry");
+                continue;
+              }
               // Divergent Fist — fast windup, grows + tints light blue, then lunges
               if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
                 f.state = "windup"; f.stateTimer = 0.12; // faster preparation
@@ -797,10 +849,30 @@ function Game() {
         const ddx = f.x - o.x;
         const ddy = (f.y - o.y);
         if (Math.abs(ddx) < PUSH_RADIUS && Math.abs(ddy) < 60) {
+          // Body-slam: a fighter launched by Yuji's Counter Strike crashes into another
+          if (f.bodySlamFrom && f.bodySlamFrom !== o.uid && Math.abs(f.vx) > 500) {
+            const slamDmg = f.bodySlamDmg ?? 25;
+            const dir = Math.sign(f.vx) as 1 | -1;
+            applyDamage(o, slamDmg, dir, f.bodySlamFrom);
+            applyDamage(f, Math.round(slamDmg * 0.6), -dir as 1 | -1, f.bodySlamFrom);
+            o.stunned = Math.max(o.stunned, 1);
+            f.stunned = Math.max(f.stunned, 1);
+            o.vx = dir * 500; o.vy = -380;
+            f.vx = -dir * 200; f.vy = -240;
+            spawnEffect("counterburst", (f.x + o.x) / 2, (f.y + o.y) / 2 - 50, 0.5);
+            playSound(SOUNDS.punchHit, 0.9);
+            f.bodySlamFrom = undefined; f.bodySlamDmg = undefined;
+            continue;
+          }
           const push = (PUSH_RADIUS - Math.abs(ddx)) * 6;
           const sign = ddx === 0 ? (Math.random() > 0.5 ? 1 : -1) : Math.sign(ddx);
           f.vx += sign * push * dt;
         }
+      }
+
+      // Clear body-slam flag when fighter lands/slows
+      if (f.bodySlamFrom && (f.onGround || Math.abs(f.vx) < 200)) {
+        f.bodySlamFrom = undefined; f.bodySlamDmg = undefined;
       }
 
       // ===== Physics =====
@@ -844,8 +916,10 @@ function Game() {
           if (p.kind === "dismantle") {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.knife, 0.7);
-            // Bleed: 2 dmg every 0.7s for 20 ticks
-            t.dots.push({ interval: 0.7, timer: 0.7, ticksLeft: 20, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            // Bleed: 2 dmg every 0.1s for ~14s of cuts (stuns while ticking)
+            t.dots.push({ interval: 0.1, timer: 0.1, ticksLeft: 140, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            t.stunned = Math.max(t.stunned, 0.4);
+            spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.4);
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
             if ((p.pierceLeft ?? 0) <= 0) return false;
@@ -879,6 +953,37 @@ function Game() {
       target.state = "hurt";
       target.stateTimer = 0.32;
     }
+
+    // ===== Yuji Counter Strike trigger =====
+    if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
+      const att = fightersRef.current.find((x) => x.uid === attackerUid && x.state !== "dead");
+      if (att) {
+        target.counterActive = 0;
+        const adef = FIGHTERS[att.type];
+        // Teleport behind the attacker
+        const behindDir = att.facing as 1 | -1;
+        target.x = att.x - behindDir * (adef.width * 0.6 + 8);
+        target.y = att.y;
+        target.vx = 0; target.vy = 0;
+        target.facing = behindDir;
+        target.state = "throw"; target.stateTimer = 0.2;
+        target.stunned = 0; // free to act
+        target.bounce = 0.3;
+        // Weak punch damage but MASSIVE knockback
+        applyDamage(att, 8, behindDir, target.uid);
+        att.vx = behindDir * 1400;       // launched away
+        att.vy = -520;
+        att.stunned = Math.max(att.stunned, 0.4);
+        att.bodySlamFrom = target.uid;
+        att.bodySlamDmg = Math.max(20, Math.round(adef.def * 0.08)); // heavier fighters slam harder
+        spawnEffect("counterburst", target.x, target.y - 50, 0.45);
+        playSound(SOUNDS.punchHit, 0.85);
+        playSound(SOUNDS.divergent, 0.6);
+        triggerReaction(target, "chuckle");
+        return;
+      }
+    }
+
 
     // ===== Yuji → Sukuna transformation (about to die at 50 or less HP) =====
     if (target.type === "yuji" && !target.possessed && target.hp <= 50) {
@@ -1066,6 +1171,8 @@ function Game() {
                     ? `brightness(0.4) saturate(2) drop-shadow(0 0 6px #ff5544)`
                     : windupActive
                     ? `brightness(1.15) saturate(1.4) drop-shadow(0 0 ${4 + 12 * f.windupGrow}px #5ec8ff) drop-shadow(0 0 ${6 + 16 * f.windupGrow}px #2aa8ff) hue-rotate(${f.windupGrow * 25}deg)`
+                    : f.counterActive > 0
+                    ? `brightness(1.2) drop-shadow(0 0 10px #ffffff) drop-shadow(0 0 18px #e8f4ff)`
                     : f.sandeActive > 0
                     ? `drop-shadow(0 0 10px hsl(${hueAt(timeRef.current)} 100% 60%))`
                     : "drop-shadow(0 4px 0 rgba(0,0,0,0.5))",
@@ -1073,6 +1180,27 @@ function Game() {
                   pointerEvents: "auto",
                 }}
               />
+
+              {/* Counter Strike white particles */}
+              {f.counterActive > 0 && (
+                <div className="absolute inset-0 pointer-events-none">
+                  {Array.from({ length: 10 }).map((_, i) => {
+                    const ang = (i / 10) * Math.PI * 2 + timeRef.current * 3;
+                    const r = 28 + Math.sin(timeRef.current * 6 + i) * 6;
+                    const px = 50 + Math.cos(ang) * r;
+                    const py = 55 + Math.sin(ang) * r * 0.9;
+                    return (
+                      <div key={i} className="absolute" style={{
+                        left: `${px}%`, top: `${py}%`,
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: "#fff",
+                        boxShadow: "0 0 6px #fff, 0 0 12px #e0f0ff",
+                        transform: "translate(-50%,-50%)",
+                      }} />
+                    );
+                  })}
+                </div>
+              )}
 
 
               {/* Gun for David - sits on the side, mirrored opposite */}
@@ -1139,7 +1267,52 @@ function Game() {
               }} />
             );
           }
-          // Black Flash: animated black lightning bolts with glowing red outline
+          if (e.kind === "cut") {
+            // Slash gash + a few blood droplets flung outward
+            const angle = (e.seed % 180) - 90; // deg
+            const len = 36 + (e.seed % 18);
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x, top: e.y, opacity: fade,
+              }}>
+                <div className="absolute" style={{
+                  left: -len / 2, top: -2,
+                  width: len, height: 4,
+                  background: "linear-gradient(90deg, rgba(120,0,0,0) 0%, #c01a1a 30%, #ff3333 50%, #c01a1a 70%, rgba(120,0,0,0) 100%)",
+                  transform: `rotate(${angle}deg)`,
+                  boxShadow: "0 0 6px rgba(200,20,20,0.9)",
+                  borderRadius: 2,
+                }} />
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const a = ((e.seed + i * 47) % 360) * Math.PI / 180;
+                  const dist = 6 + t * (16 + (i * 3));
+                  const sz = 3 + ((e.seed + i) % 3);
+                  return (
+                    <div key={i} className="absolute" style={{
+                      left: Math.cos(a) * dist - sz / 2,
+                      top: Math.sin(a) * dist - sz / 2 + t * 6,
+                      width: sz, height: sz, borderRadius: "50%",
+                      background: i % 2 ? "#a01010" : "#d61f1f",
+                      boxShadow: "0 0 3px rgba(160,0,0,0.8)",
+                    }} />
+                  );
+                })}
+              </div>
+            );
+          }
+          if (e.kind === "counterburst") {
+            const size = 30 + t * 90;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(220,235,255,0.7) 40%, rgba(160,200,255,0) 75%)",
+                boxShadow: `0 0 ${20 * fade}px #fff, 0 0 ${40 * fade}px #cfe6ff`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
