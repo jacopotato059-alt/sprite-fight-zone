@@ -671,6 +671,28 @@ function Game() {
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
             }
+          } else if (f.type === "yuji") {
+            if (!f.possessed) {
+              // Divergent Fist — fast windup, grows + tints light blue, then lunges
+              if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
+                f.state = "windup"; f.stateTimer = 0.12; // faster preparation
+                f.windupKind = "divergent"; f.windupGrow = 0;
+                f.pendingBlack = Math.random() < 0.25; // 25% Black Flash
+                f.vx = 0;
+                f.abilityCd[0] = 10; f.globalCd = 0.3;
+                continue;
+              }
+            } else {
+              // Sukuna — Dismantle: linear, fast, piercing slash
+              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+                f.state = "windup"; f.stateTimer = 0.16;
+                f.windupKind = "dismantle"; f.windupGrow = 0;
+                const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = dir; f.vx = 0;
+                f.abilityCd[0] = 7; f.globalCd = 0.4;
+                continue;
+              }
+            }
           } else {
             // Dummy abilities
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
@@ -698,6 +720,7 @@ function Game() {
               continue;
             }
           }
+
 
           // ===== Movement (Smash-style spacing) =====
           let desired = MELEE_RANGE * 0.9;
