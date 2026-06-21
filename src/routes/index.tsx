@@ -978,15 +978,28 @@ function Game() {
 
 
   const applyDamage = (target: Fighter, dmg: number, fromFacing: 1 | -1, attackerUid?: number, isDot = false) => {
-    target.hp -= dmg;
+    // Critical hit: 12% chance on non-dot for +50% dmg
+    const crit = !isDot && Math.random() < 0.12;
+    const finalDmg = crit ? Math.round(dmg * 1.5) : dmg;
+    target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
       target.bounce = 0.3;
-      target.vx = fromFacing * 260;
-      target.vy = -300;
+      target.vx = fromFacing * (crit ? 360 : 260);
+      target.vy = crit ? -360 : -300;
       target.state = "hurt";
-      target.stateTimer = 0.32;
+      target.stateTimer = crit ? 0.42 : 0.32;
     }
+    // Floating damage number
+    const tdef = FIGHTERS[target.type];
+    damageNumsRef.current.push({
+      uid: nextUid(),
+      x: target.x + (Math.random() - 0.5) * 16,
+      y: target.y - tdef.height * 0.9,
+      vy: isDot ? -28 : -70,
+      life: isDot ? 0.55 : 0.85, maxLife: isDot ? 0.55 : 0.85,
+      dmg: finalDmg, crit,
+    });
 
     // ===== Yuji Counter Strike trigger =====
     if (!isDot && target.type === "yuji" && !target.possessed && target.counterActive > 0 && attackerUid && target.hp > 0) {
