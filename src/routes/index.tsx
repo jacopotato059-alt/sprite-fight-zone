@@ -194,6 +194,10 @@ interface Fighter {
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
+  stunned: number; // seconds locked out of AI/actions
+  counterActive: number; // Yuji Counter Strike window
+  bodySlamFrom?: number; // uid that launched us as a body slam projectile
+  bodySlamDmg?: number;
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
   tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
