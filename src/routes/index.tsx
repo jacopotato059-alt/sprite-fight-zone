@@ -903,6 +903,8 @@ function Game() {
               f.whip = { targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
               f.abilityCd[0] = 6; f.globalCd = 0.4;
               playSound(SOUNDS.punchLunge, 0.6); // 1st sound: lunge windup
+              playSound(SOUNDS.electric, 0.5);
+              spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
             // Punch combo (idx 1): chains 3 hits, escalating dmg/knockback
