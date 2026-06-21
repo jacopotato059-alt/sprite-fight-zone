@@ -417,23 +417,39 @@ function Game() {
           const hpRatio = f.hp / f.maxHp;
           const isDavid = f.type === "david";
 
-          // Reaction-time gated dodge
+          // Reaction-time gated dodge — sharper reads, dodges more often
           if (threat) {
-            if (f.reactionDelay <= 0) {
+            // urgent threats are reacted to almost instantly
+            const ready = threat.urgent ? f.reactionDelay <= 0.05 : f.reactionDelay <= 0;
+            if (ready) {
               if (threat.kind === "proj" && f.onGround && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY; f.jumpCd = 0.4; f.jumpsLeft = 1;
+                // High evasive leap to clear projectiles and gain the high ground
+                const high = Math.random() < 0.5;
+                f.vy = high ? HIGH_JUMP_VELOCITY : JUMP_VELOCITY;
+                f.vx = -f.facing * WALK_SPEED_BASE * 1.2;
+                f.jumpCd = 0.35; f.jumpsLeft = 1;
                 f.lastDodgedFrom = threat.p.ownerUid;
               } else if (threat.kind === "proj" && !f.onGround && f.jumpsLeft > 0 && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY * 0.85; f.jumpCd = 0.3; f.jumpsLeft -= 1;
+                // Air-dodge: double jump + drift away
+                f.vy = JUMP_VELOCITY * 0.9; f.vx = -f.facing * MAX_AIR_SPEED;
+                f.jumpCd = 0.25; f.jumpsLeft -= 1;
+                f.lastDodgedFrom = threat.p.ownerUid;
               } else if (threat.kind === "lunge" && f.onGround && f.jumpCd <= 0) {
-                f.vy = JUMP_VELOCITY * 0.85; f.vx = -f.facing * WALK_SPEED_BASE * 1.8;
-                f.jumpCd = 0.5; f.jumpsLeft = 1; f.lastDodgedFrom = threat.o.uid;
+                // Leap over the lunge or roll back depending on read
+                if (Math.random() < 0.6) { f.vy = HIGH_JUMP_VELOCITY * 0.8; }
+                f.vx = -f.facing * WALK_SPEED_BASE * 2.0;
+                f.jumpCd = 0.4; f.jumpsLeft = 1; f.lastDodgedFrom = threat.o.uid;
+              } else if (threat.kind === "windup" && f.onGround && f.jumpCd <= 0 && Math.random() < 0.5) {
+                // Pre-emptive juke before the shot even fires
+                f.vy = JUMP_VELOCITY * 0.75; f.vx = -f.facing * WALK_SPEED_BASE * 1.4;
+                f.jumpCd = 0.5; f.jumpsLeft = 1;
               }
-              f.reactionDelay = 0.12 + Math.random() * 0.18;
+              f.reactionDelay = 0.06 + Math.random() * 0.12;
             } else {
               f.reactionDelay -= dt;
             }
           }
+
 
           // Battle IQ - intent selection
           if (f.decisionCd <= 0) {
