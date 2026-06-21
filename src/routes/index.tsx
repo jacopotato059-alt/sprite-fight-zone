@@ -963,7 +963,7 @@ function Game() {
               const wantsAerial = f.onGround && f.aerialIntent <= 0 && f.jumpCd <= 0
                 && (f.intent === "bait" || f.intent === "space" || hpRatio < 0.45)
                 && dist > MELEE_RANGE * 1.2
-                && Math.random() < 0.025;
+                && Math.random() < 0.012;
               if (wantsAerial) f.aerialIntent = 2.2;
               if ((f.aerialIntent ?? 0) > 0 && f.onGround) {
                 // Sprint to the closer wall, then backflip toward enemy
