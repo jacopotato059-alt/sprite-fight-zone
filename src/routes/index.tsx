@@ -489,29 +489,82 @@ function Game() {
       // ===== Deku Black Whip update =====
       if (f.whip) {
         f.whip.t += dt;
-        const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
-        if (!target || f.whip.t >= 0.75) {
-          f.whip = undefined;
-        } else if (f.whip.phase === "extend") {
-          // Tip travels from deku toward target
-          const k = Math.min(1, f.whip.t / 0.3);
-          f.whip.tipX = f.x + (target.x - f.x) * k;
-          if (k >= 1) {
-            f.whip.phase = "drag";
-            f.whip.dragStartX = target.x;
-            target.stunned = Math.max(target.stunned, 1.0);
-            target.state = "hurt";
-            target.stateTimer = Math.max(target.stateTimer, 1.0);
-            target.vy = -160;
-            playSound(SOUNDS.crackWhip, 0.75);
+        const wdef = FIGHTERS[f.type];
+        if (f.whip.mode === "wall") {
+          // Wall-Whip retreat: rope shoots to a wall anchor, then yanks Deku up/over
+          const anchorX = f.whip.wallX ?? f.x;
+          const anchorY = f.whip.wallY ?? (f.y - 180);
+          if (f.whip.t >= 0.9) {
+            f.whip = undefined;
+          } else if (f.whip.phase === "extend") {
+            const k = Math.min(1, f.whip.t / 0.22);
+            f.whip.tipX = f.x + (anchorX - f.x) * k;
+            f.whip.tipY = (f.whip.sourceY) + (anchorY - f.whip.sourceY) * k;
+            if (k >= 1) {
+              f.whip.phase = "drag";
+              f.whip.selfStartX = f.x;
+              f.whip.selfStartY = f.y;
+              spawnEffect("wallspark", anchorX, anchorY, 0.45);
+              playSound(SOUNDS.crackWhip, 0.75);
+            }
+          } else if (f.whip.phase === "drag") {
+            const dragT = Math.min(1, (f.whip.t - 0.22) / 0.42);
+            const ease = 1 - Math.pow(1 - dragT, 2.4);
+            const sx = f.whip.selfStartX ?? f.x;
+            const sy = f.whip.selfStartY ?? f.y;
+            f.x = sx + (anchorX - sx) * ease;
+            f.y = sy + (anchorY - sy) * ease;
+            f.vx = 0; f.vy = 0;
+            f.onGround = false;
+            f.state = "throw"; f.stateTimer = Math.max(f.stateTimer, 0.1);
+            f.whip.tipX = f.x; f.whip.tipY = f.y - wdef.height * 0.55;
+            if (dragT >= 1) {
+              // Release: spring off the wall outward + skyward for an aerial reset
+              const outDir: 1 | -1 = (anchorX < w / 2 ? 1 : -1);
+              f.vy = HIGH_JUMP_VELOCITY * 0.85;
+              f.vx = outDir * MAX_AIR_SPEED * 1.4;
+              f.facing = outDir;
+              f.jumpsLeft = 1; f.jumpCd = 0.35;
+              spawnEffect("electric", f.x, f.y - wdef.height * 0.55, 0.4);
+            }
           }
-        } else if (f.whip.phase === "drag") {
-          const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
-          const anchorX = f.x + f.facing * (FIGHTERS[f.type].width * 0.75);
-          const startX = f.whip.dragStartX ?? target.x;
-          target.x = startX + (anchorX - startX) * dragT;
-          target.vx = 0;
-          f.whip.tipX = target.x;
+        } else {
+          const target = fighters.find((o) => o.uid === f.whip!.targetUid && o.state !== "dead");
+          if (!target || f.whip.t >= 0.75) {
+            f.whip = undefined;
+          } else if (f.whip.phase === "extend") {
+            // Tip travels from deku toward target
+            const k = Math.min(1, f.whip.t / 0.3);
+            f.whip.tipX = f.x + (target.x - f.x) * k;
+            const tgtY = target.y - FIGHTERS[target.type].height * 0.55;
+            f.whip.tipY = f.whip.sourceY + (tgtY - f.whip.sourceY) * k;
+            if (k >= 1) {
+              f.whip.phase = "drag";
+              f.whip.dragStartX = target.x;
+              f.whip.dragStartY = target.y;
+              target.stunned = Math.max(target.stunned, 1.0);
+              target.state = "hurt";
+              target.stateTimer = Math.max(target.stateTimer, 1.0);
+              target.vy = -160;
+              playSound(SOUNDS.crackWhip, 0.75);
+            }
+          } else if (f.whip.phase === "drag") {
+            const dragT = Math.min(1, (f.whip.t - 0.3) / 0.4);
+            const anchorX = f.x + f.facing * (wdef.width * 0.75);
+            const startX = f.whip.dragStartX ?? target.x;
+            target.x = startX + (anchorX - startX) * dragT;
+            // Aerial variant: if Deku is airborne, pull target UP to him for juggle combos
+            if (!f.onGround) {
+              const startY = f.whip.dragStartY ?? target.y;
+              const anchorY = f.y + 10;
+              target.y = startY + (anchorY - startY) * dragT;
+              target.vy = -80;
+              target.onGround = false;
+            }
+            target.vx = 0;
+            f.whip.tipX = target.x;
+            f.whip.tipY = target.y - FIGHTERS[target.type].height * 0.55;
+          }
         }
       }
 
