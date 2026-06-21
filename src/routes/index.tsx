@@ -439,8 +439,20 @@ function Game() {
           const tryUse = (idx: number) => f.abilityCd[idx] <= 0 && f.globalCd <= 0;
 
           if (isDavid) {
-            // Sandevistan status when health low or enemy pressuring
-            if (tryUse(0) && (hpRatio < 0.5 || (enemy.state === "lunge" && dist < 200) || (f.intent === "punish" && dist < 300))) {
+            // While Sandevistan is ACTIVE: free fast normal-style punches (no extra CD on the status itself)
+            if (f.sandeActive > 0 && f.sandeAttackCd <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.1) {
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = 25; // normal punch damage during sandevistan
+              f.sandeAttackCd = 0.45;
+              f.globalCd = 0.25;
+              playSound(SOUNDS.punchLunge, 0.55);
+              continue;
+            }
+            // Sandevistan status: pop on aggression, when pressured, or to punish — much more engaging
+            if (tryUse(0) && (hpRatio < 0.6 || (enemy.state === "lunge" && dist < 220) || (f.intent === "punish") || (dist < 260 && Math.random() < 0.4))) {
               startSande(f, 3, "full");
               f.abilityCd[0] = 12; f.globalCd = 0.3;
             }
@@ -451,7 +463,7 @@ function Game() {
               f.abilityCd[1] = 5; f.globalCd = 0.5;
               continue;
             }
-            // Sandy Punch
+            // Sandy Punch (own micro-sandevistan, also activates the same status visuals)
             else if (tryUse(2) && dist < LUNGE_DISTANCE * 1.05) {
               startSande(f, 0.8, "short");
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
