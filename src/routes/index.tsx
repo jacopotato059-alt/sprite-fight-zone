@@ -1634,6 +1634,49 @@ function Game() {
             </div>
           );
         })}
+
+        {/* Deku Black Whip ropes */}
+        {fightersRef.current.filter((f) => f.whip).map((f) => {
+          const def = FIGHTERS[f.type];
+          const w = f.whip!;
+          const srcX = f.x;
+          const srcY = w.sourceY;
+          const tipX = w.tipX ?? srcX;
+          const target = fightersRef.current.find((o) => o.uid === w.targetUid);
+          const tipY = target ? target.y - FIGHTERS[target.type].height * 0.55 : srcY;
+          const dx = tipX - srcX; const dy = tipY - srcY;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          const fade = Math.max(0, 1 - w.t / 0.75);
+          return (
+            <div key={`whip-${f.uid}`} className="absolute pointer-events-none" style={{ left: srcX, top: srcY, opacity: fade }}>
+              {/* main rope */}
+              <div style={{
+                position: "absolute", left: 0, top: -3,
+                width: len, height: 6,
+                background: "linear-gradient(180deg, #000 0%, #000 35%, #1a1a1a 50%, #000 65%, #000 100%)",
+                border: "1px solid #3affc5",
+                boxShadow: "0 0 6px #3affc5, 0 0 12px rgba(58,255,197,0.5)",
+                transform: `rotate(${angle}deg)`,
+                transformOrigin: "0 50%",
+                borderRadius: 2,
+              }} />
+              {/* side rope wisps during initial pop (first 0.18s) */}
+              {w.t < 0.18 && [-1, 1].map((s) => (
+                <div key={s} style={{
+                  position: "absolute",
+                  left: s * (def.width * 0.45),
+                  top: -10 - (w.t / 0.18) * 12,
+                  width: 4, height: 18 + (w.t / 0.18) * 14,
+                  background: "#000",
+                  border: "1px solid #3affc5",
+                  boxShadow: "0 0 4px #3affc5",
+                  borderRadius: 2,
+                }} />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
 
