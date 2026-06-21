@@ -1063,29 +1063,38 @@ function Game() {
               spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4);
               continue;
             }
-            // Punch combo (idx 1): chains 3 hits, finisher total cooldown = 4s
+            // Punch combo (idx 1): chains 4 hits. dmgs: 34, 45, 59, 67 (mega).
             if (tryUse(1) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.25) {
-              const stack = f.punchStacks ?? 0;
-              const base = 8;
-              const dmg = stack === 0 ? base : stack === 1 ? Math.round(base * 1.2) : Math.round(base * 1.2 * 1.6);
-              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.5;
+              const stack = f.punchStacks ?? 0; // 0..3
+              const DMG = [34, 45, 59, 67];
+              const dmg = DMG[Math.min(3, stack)];
+              const isMega = stack === 3;
+              const isFinalish = stack >= 2;
+              const reach = isMega ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE;
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / (isMega ? 2.2 : 2.5);
               f.lungeFromX = f.x;
-              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
+              f.lungeToX = f.x + f.facing * Math.min(reach, dist + (isMega ? 50 : 30));
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
               f.lungeDamage = dmg;
-              f.lungeKind = stack === 2 ? "dekuFinal" : "deku";
-              f.punchPitch = Math.max(0.55, 1 - stack * 0.15);
+              f.lungeKind = isMega ? "dekuMega" : isFinalish ? "dekuFinal" : "deku";
+              f.punchPitch = Math.max(0.5, 1 - stack * 0.13);
               f.punchHitStack = stack;
-              if (stack >= 2) {
+              if (stack >= 3) {
+                // 4th finisher — full reset, total CD = 4s
                 f.punchStacks = 0; f.punchStackTimer = 0;
                 f.abilityCd[1] = 4;
               } else {
                 f.punchStacks = stack + 1;
-                f.punchStackTimer = 2.0;
-                f.abilityCd[1] = 0.6;
+                f.punchStackTimer = 2.2;
+                f.abilityCd[1] = 0.45;
               }
-              f.globalCd = 0.18;
-              playPitched(SOUNDS.punchLunge, 0.55, f.punchPitch);
+              f.globalCd = isMega ? 0.28 : 0.18;
+              playPitched(SOUNDS.punchLunge, isMega ? 0.75 : 0.55, f.punchPitch);
+              if (isMega) {
+                // One For All Surge windup spark
+                spawnEffect("electric", f.x, f.y - def.height * 0.55, 0.35);
+                spawnEffect("greenfire", f.x, f.y - def.height * 0.55, 0.4);
+              }
               continue;
             }
           } else {
