@@ -1132,7 +1132,20 @@ function Game() {
               continue;
             }
           } else {
-            // Dummy abilities
+            // Dummy abilities — with "Rage" sub-variant when low HP
+            const dummyRage = hpRatio < 0.35;
+            // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
+            if (dummyRage && tryUse(0) && dist < LUNGE_DISTANCE * 1.4 && dist > MELEE_RANGE * 0.3) {
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION * 0.85;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE * 1.3, dist + 50);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = 36;
+              f.abilityCd[0] = 1.1; f.globalCd = 0.35;
+              playSound(SOUNDS.punchLunge, 0.65);
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
+              continue;
+            }
             if (tryUse(0) && dist < LUNGE_DISTANCE * 1.05 && dist > MELEE_RANGE * 0.35 && (f.intent === "approach" || f.intent === "punish")) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION;
               f.lungeFromX = f.x;
