@@ -1212,7 +1212,44 @@ function Game() {
                     transition: "width 120ms linear",
                   }} />
                 </div>
+                {/* Cooldown pips */}
+                {(() => {
+                  const slots = possessed
+                    ? [{ name: "Dismantle", cd: f.abilityCd[0] ?? 0, max: 15, color: "#ff5a6e" }, { name: "Clash", cd: f.abilityCd[1] ?? 0, max: 2.5, color: "#ffb04a" }]
+                    : def.abilities.map((a, i) => ({ name: a.name, cd: f.abilityCd[i] ?? 0, max: a.cooldown, color: ["#4ec1ff", "#ffb04a", "#b884ff"][i] || "#aaa" }));
+                  return (
+                    <div className="flex gap-1 justify-center mt-1" style={{ width: 96, marginLeft: "auto", marginRight: "auto" }}>
+                      {slots.map((s, i) => {
+                        const ready = s.cd <= 0.001;
+                        const pct = ready ? 1 : 1 - s.cd / s.max;
+                        return (
+                          <div key={i} title={s.name} className="relative" style={{
+                            flex: 1, height: 4,
+                            background: "rgba(0,0,0,0.65)",
+                            border: "1px solid #000",
+                            boxShadow: ready ? `0 0 4px ${s.color}` : "none",
+                          }}>
+                            <div style={{
+                              width: `${pct * 100}%`, height: "100%",
+                              background: ready ? s.color : `${s.color}88`,
+                              transition: "width 80ms linear",
+                            }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                {debugAi && (
+                  <div style={{ fontFamily: "Chakra Petch", fontSize: 7, color: "#9be0ff", textShadow: "1px 1px 0 #000", marginTop: 2, lineHeight: 1.1 }}>
+                    {f.intent} | {f.state}{f.stunned > 0 ? " | STUN" : ""}{f.counterActive > 0 ? " | CTR" : ""}{f.sandeActive > 0 ? " | SAND" : ""}
+                    <div style={{ color: "#ffd16e" }}>
+                      gcd {f.globalCd.toFixed(1)} | tgt {f.tauntedBy ?? "-"}
+                    </div>
+                  </div>
+                )}
               </div>
+
 
               {/* Reaction icon */}
               {f.reactionIcon && (
