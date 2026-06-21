@@ -424,20 +424,34 @@ function Game() {
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
+      f.stunned = Math.max(0, f.stunned - dt);
+      f.counterActive = Math.max(0, f.counterActive - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       // ===== Damage-over-time (Sukuna Dismantle bleed) =====
       if (f.dots.length) {
         for (const d of f.dots) {
           d.timer -= dt;
-          if (d.timer <= 0 && d.ticksLeft > 0) {
+          // Multiple ticks may fire in a single frame given the 0.1s interval
+          let safety = 8;
+          while (d.timer <= 0 && d.ticksLeft > 0 && safety-- > 0) {
             d.timer += d.interval;
             d.ticksLeft -= 1;
             applyDamage(f, d.dmg, d.fromFacing, d.ownerUid, true);
-            playSound(SOUNDS.knife, 0.6);
+            playSound(SOUNDS.knife, 0.35);
+            // Bleed stuns the victim while it ticks + spawns a cut/blood puff
+            f.stunned = Math.max(f.stunned, d.interval + 0.08);
+            const tdef = FIGHTERS[f.type];
+            spawnEffect("cut", f.x + (Math.random() - 0.5) * tdef.width * 0.6, f.y - tdef.height * (0.3 + Math.random() * 0.5), 0.35);
           }
         }
         f.dots = f.dots.filter((d) => d.ticksLeft > 0);
+      }
+
+      // ===== Stun lockout — skip AI/movement while stunned =====
+      if (f.stunned > 0 && f.state !== "lunge" && f.state !== "windup") {
+        f.vx *= 0.7;
+        if (f.state !== "hurt") { f.state = "hurt"; f.stateTimer = Math.max(f.stateTimer, f.stunned); }
       }
 
 
