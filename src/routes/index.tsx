@@ -145,6 +145,7 @@ const FIGHTERS: Record<FighterTypeId, FighterDef> = {
     atk: 100, def: 250, speed: 1.3,
     abilities: [
       { name: "Divergent Fist", damage: 35, type: "melee", cooldown: 3 },
+      { name: "Counter Strike", damage: 8, type: "status", cooldown: 5 },
     ],
     width: 64, height: 104,
   },
