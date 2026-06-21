@@ -851,7 +851,6 @@ function Game() {
                 f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
               }
-              }
               // ===== Aerial combat: wall-run + backflip to dive bomb =====
               if (f.aerialIntent === undefined) f.aerialIntent = 0;
               f.aerialIntent = Math.max(0, f.aerialIntent - dt);
