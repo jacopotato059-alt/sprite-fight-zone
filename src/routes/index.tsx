@@ -1695,7 +1695,7 @@ function Game() {
 
             {!showStats ? (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <SlotCard selected={selectedSlot === "dummy"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("dummy"); }}
                     sprite={FIGHTERS.dummy.sprite} name="Dummy" />
@@ -1705,6 +1705,9 @@ function Game() {
                   <SlotCard selected={selectedSlot === "yuji"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("yuji"); }}
                     sprite={FIGHTERS.yuji.sprite} name="Yuji Itadori" />
+                  <SlotCard selected={selectedSlot === "deku"}
+                    onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("deku"); }}
+                    sprite={FIGHTERS.deku.sprite} name="Deku" />
                 </div>
 
 
