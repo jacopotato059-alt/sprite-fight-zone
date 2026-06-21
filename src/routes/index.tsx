@@ -199,7 +199,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
-  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "detroit";
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "dekuMega" | "detroit";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
