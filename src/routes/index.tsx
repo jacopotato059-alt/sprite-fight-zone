@@ -3,6 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
+import yujiAsset from "@/assets/yuji.png.asset.json";
+import sukunaAsset from "@/assets/sukuna.png.asset.json";
+import dismantleAsset from "@/assets/dismantle.png.asset.json";
 import tauntIcon from "@/assets/icons/taunt.png.asset.json";
 import angryIcon from "@/assets/icons/angry.png.asset.json";
 import chuckleIcon from "@/assets/icons/chuckle.png.asset.json";
@@ -17,6 +20,13 @@ import sndSande from "@/assets/sounds/sandevistan.mp3.asset.json";
 import sndTaunt from "@/assets/sounds/taunt.mp3.asset.json";
 import sndAngry from "@/assets/sounds/angry.mp3.asset.json";
 import sndChuckle from "@/assets/sounds/chuckle.mp3.asset.json";
+import sndDivergent from "@/assets/sounds/divergent-hit.mp3.asset.json";
+import sndBlackFlash from "@/assets/sounds/black-flash.mp3.asset.json";
+import sndKnife from "@/assets/sounds/knife-slash.mp3.asset.json";
+import sndSukunaTransform from "@/assets/sounds/sukuna-transform.mp3.asset.json";
+import sndDismantle1 from "@/assets/sounds/dismantle-1.mp3.asset.json";
+import sndDismantle2 from "@/assets/sounds/dismantle-2.mp3.asset.json";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
