@@ -253,6 +253,7 @@ function Game() {
   const [, forceTick] = useState(0);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
+  const effectsRef = useRef<Effect[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
   const timeRef = useRef<number>(0);
