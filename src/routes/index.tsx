@@ -285,6 +285,7 @@ function Game() {
     f.sandeActive = Math.max(f.sandeActive, dur);
     f.afterImages = [];
     f.afterTimer = 0;
+    f.lastAfterX = f.x; f.lastAfterY = f.y;
     if (withSound === "full") playSound(SOUNDS.sande, 0.55);
     else playSoundFade(SOUNDS.sande, 700, 300, 0.55);
   };
