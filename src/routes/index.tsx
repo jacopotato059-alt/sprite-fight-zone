@@ -117,6 +117,8 @@ interface Fighter {
   sandeHue: number;
   afterTimer: number;
   afterImages: AfterImage[];
+  lastAfterX?: number; lastAfterY?: number;
+  sandeAttackCd: number;
   shotsLeft: number; shotTimer: number; shotTarget?: number;
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
