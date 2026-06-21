@@ -1010,7 +1010,7 @@ function Game() {
       target.state = "idle";
       target.stateTimer = 0;
       target.dots = [];
-      target.abilityCd = [0];
+      target.abilityCd = [0, 0];
       target.globalCd = 0.5;
       target.bounce = 0.4;
       playSound(SOUNDS.sukunaTransform, 1.0);
