@@ -117,6 +117,8 @@ interface Fighter {
   sandeHue: number;
   afterTimer: number;
   afterImages: AfterImage[];
+  lastAfterX?: number; lastAfterY?: number;
+  sandeAttackCd: number;
   shotsLeft: number; shotTimer: number; shotTarget?: number;
   // Taunt / reactions
   reactionIcon?: { url: string; until: number };
@@ -203,7 +205,7 @@ function Game() {
       onGround: false, jumpCd: 0, jumpsLeft: 2,
       decisionCd: 0, intent: "approach", intentTimer: 0,
       reactionDelay: 0.12 + Math.random() * 0.18,
-      sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [],
+      sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       tauntCd: 1 + Math.random() * 2,
     });
@@ -262,7 +264,7 @@ function Game() {
 
   const tauntAt = (taunter: Fighter, target: Fighter) => {
     if (taunter.tauntCd > 0) return;
-    if (Math.random() > 0.7) return; // 70% chance
+    if (Math.random() > 0.1) return; // 10% chance
     taunter.tauntCd = 3 + Math.random() * 3;
     taunter.state = "taunt";
     taunter.stateTimer = 0.6;
@@ -283,6 +285,7 @@ function Game() {
     f.sandeActive = Math.max(f.sandeActive, dur);
     f.afterImages = [];
     f.afterTimer = 0;
+    f.lastAfterX = f.x; f.lastAfterY = f.y;
     if (withSound === "full") playSound(SOUNDS.sande, 0.55);
     else playSoundFade(SOUNDS.sande, 700, 300, 0.55);
   };
@@ -307,20 +310,24 @@ function Game() {
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
+      f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       const sandeMult = f.sandeActive > 0 ? 3 : 1;
 
-      // Sandevistan afterimage emitter ~ 7/s (5 per 0.7s)
+      // Sandevistan afterimage trail - emit by distance (~1m = 50px) for true trail feel
       if (f.sandeActive > 0) {
-        f.afterTimer -= dt;
-        if (f.afterTimer <= 0) {
-          f.afterTimer = 0.14;
-          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 0.45 });
-          if (f.afterImages.length > 8) f.afterImages.shift();
+        if (f.lastAfterX === undefined) { f.lastAfterX = f.x; f.lastAfterY = f.y; }
+        const dxA = f.x - (f.lastAfterX ?? f.x);
+        const dyA = f.y - (f.lastAfterY ?? f.y);
+        const distA = Math.hypot(dxA, dyA);
+        if (distA > 50) {
+          f.afterImages.push({ x: f.x, y: f.y, facing: f.facing, hue: hueAt(timeRef.current), life: 3 });
+          f.lastAfterX = f.x; f.lastAfterY = f.y;
+          if (f.afterImages.length > 24) f.afterImages.shift();
         }
       }
-      // Age afterimages
+      // Age afterimages (3s lifetime)
       if (f.afterImages.length) {
         for (const a of f.afterImages) a.life -= dt;
         f.afterImages = f.afterImages.filter((a) => a.life > 0);
@@ -432,8 +439,20 @@ function Game() {
           const tryUse = (idx: number) => f.abilityCd[idx] <= 0 && f.globalCd <= 0;
 
           if (isDavid) {
-            // Sandevistan status when health low or enemy pressuring
-            if (tryUse(0) && (hpRatio < 0.5 || (enemy.state === "lunge" && dist < 200) || (f.intent === "punish" && dist < 300))) {
+            // While Sandevistan is ACTIVE: free fast normal-style punches (no extra CD on the status itself)
+            if (f.sandeActive > 0 && f.sandeAttackCd <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.1) {
+              f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
+              f.lungeFromX = f.x;
+              f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
+              f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+              f.lungeDamage = 25; // normal punch damage during sandevistan
+              f.sandeAttackCd = 0.45;
+              f.globalCd = 0.25;
+              playSound(SOUNDS.punchLunge, 0.55);
+              continue;
+            }
+            // Sandevistan status: pop on aggression, when pressured, or to punish — much more engaging
+            if (tryUse(0) && (hpRatio < 0.6 || (enemy.state === "lunge" && dist < 220) || (f.intent === "punish") || (dist < 260 && Math.random() < 0.4))) {
               startSande(f, 3, "full");
               f.abilityCd[0] = 12; f.globalCd = 0.3;
             }
@@ -444,7 +463,7 @@ function Game() {
               f.abilityCd[1] = 5; f.globalCd = 0.5;
               continue;
             }
-            // Sandy Punch
+            // Sandy Punch (own micro-sandevistan, also activates the same status visuals)
             else if (tryUse(2) && dist < LUNGE_DISTANCE * 1.05) {
               startSande(f, 0.8, "short");
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
@@ -667,7 +686,7 @@ function Game() {
         {fightersRef.current.flatMap((f) => {
           const def = FIGHTERS[f.type];
           return f.afterImages.map((a, i) => {
-            const alpha = Math.max(0, a.life / 0.45) * 0.55;
+            const alpha = Math.max(0, a.life / 3) * 0.55;
             return (
               <div key={`${f.uid}-a-${i}`} className="absolute pointer-events-none"
                 style={{
