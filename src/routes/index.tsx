@@ -997,19 +997,33 @@ function Game() {
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
               const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
               // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
+              // Sub-variant: "Twin Clash" — when enemy is busy/airborne, fire a high+low pair
               if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
                 f.state = "throw"; f.stateTimer = 0.18;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                // Lead the target — better aim
                 const lead = enemy.vx * 0.18;
+                const twin = (enemy.state === "lunge" || enemy.state === "shoot" || !enemy.onGround) && Math.random() < 0.55;
+                const baseY = f.y - def.height * 0.55;
                 projectilesRef.current.push({
                   uid: nextUid(), ownerUid: f.uid, kind: "clash",
-                  x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 0,
+                  x: f.x + dir * 28, y: twin ? baseY - 22 : baseY,
+                  vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: twin ? -60 : 0,
                   damage: 18, ttl: 1.4,
                 });
-                f.abilityCd[1] = 2.5; f.globalCd = 0.3;
+                if (twin) {
+                  projectilesRef.current.push({
+                    uid: nextUid(), ownerUid: f.uid, kind: "clash",
+                    x: f.x + dir * 28, y: baseY + 22,
+                    vx: dir * (PROJECTILE_SPEED * 1.25) + lead, vy: 60,
+                    damage: 14, ttl: 1.4,
+                  });
+                  f.abilityCd[1] = 3.5; // slightly longer for the twin
+                  triggerReaction(f, "chuckle");
+                } else {
+                  f.abilityCd[1] = 2.5;
+                }
+                f.globalCd = 0.3;
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
