@@ -359,6 +359,14 @@ function Game() {
     });
   };
 
+  // Hitstop = brief slowdown on heavy hits. Shake = arena rumble. Both feel-good polish.
+  const bigHit = (dmg: number) => {
+    if (dmg >= 60) { hitstopRef.current = Math.max(hitstopRef.current, 0.11); shakeRef.current = Math.max(shakeRef.current, 0.45); }
+    else if (dmg >= 45) { hitstopRef.current = Math.max(hitstopRef.current, 0.07); shakeRef.current = Math.max(shakeRef.current, 0.30); }
+    else if (dmg >= 28) { shakeRef.current = Math.max(shakeRef.current, 0.18); }
+  };
+
+
 
   useEffect(() => {
     let raf = 0;
