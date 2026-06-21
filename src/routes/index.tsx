@@ -567,10 +567,20 @@ function Game() {
             f.shotTimer = 0.12;
             f.shotsLeft -= 1;
             const dir = f.facing;
+            // Aim at stored target Y with small spread (tightened)
+            const muzzleY = f.y - def.height * 0.55;
+            const tgtY = f.shotTarget ?? muzzleY;
+            const dyAim = tgtY - muzzleY;
+            // Time-to-target estimate to leading vy properly
+            const enemyForLead = nearestEnemy(f, fightersRef.current);
+            const tof = enemyForLead ? Math.abs(enemyForLead.x - f.x) / BULLET_SPEED : 0.3;
+            const leadY = enemyForLead ? enemyForLead.vy * tof * 0.8 : 0;
+            const aimVy = (dyAim + leadY) / Math.max(0.08, tof);
+            const spread = (Math.random() - 0.5) * 12; // much tighter
             projectilesRef.current.push({
               uid: nextUid(), ownerUid: f.uid, kind: "bullet",
-              x: f.x + dir * 30, y: f.y - def.height * 0.55,
-              vx: dir * BULLET_SPEED, vy: -10 + (Math.random() - 0.5) * 30,
+              x: f.x + dir * 30, y: muzzleY,
+              vx: dir * BULLET_SPEED, vy: aimVy + spread,
               damage: 34, ttl: 1.2,
             });
             playSound(SOUNDS.pistol, 0.5);
