@@ -847,24 +847,27 @@ function Game() {
           }
 
 
-          // Battle IQ - intent selection
+          // Battle IQ - intent selection (faster, smarter decisions)
           if (f.decisionCd <= 0) {
-            f.decisionCd = 0.14 + Math.random() * 0.16;
+            f.decisionCd = 0.10 + Math.random() * 0.12;
             const r = Math.random();
             const enemyBusy = enemy.state === "lunge" || enemy.state === "throw" || enemy.state === "shoot" || enemy.state === "hurt" || enemy.state === "taunt";
+            const enemyWindup = enemy.state === "windup";
             const canAttackSoon = f.abilityCd.some((cd, i) => cd < 0.4 && def.abilities[i].type !== "status");
             const enemyAirborne = !enemy.onGround && enemy.y < f.y - 60;
             const enemyHpRatio = enemy.hp / enemy.maxHp;
             // Read the situation like a real player would
-            if (enemyBusy && canAttackSoon) f.intent = "punish";          // whiff/animation punish
+            if (enemyWindup && canAttackSoon && dist < LUNGE_DISTANCE * 1.2) f.intent = "punish"; // punish telegraphs
+            else if (enemyBusy && canAttackSoon) f.intent = "punish";          // whiff/animation punish
             else if (enemyAirborne && canAttackSoon) f.intent = "punish"; // anti-air read
-            else if (hpRatio < 0.28 && r < 0.6) f.intent = "retreat";     // survival, reset neutral
-            else if (enemyHpRatio < 0.3 && canAttackSoon && r < 0.7) f.intent = "approach"; // close out the kill
+            else if (hpRatio < 0.22 && r < 0.55) f.intent = "retreat";     // only retreat when truly low
+            else if (hpRatio < 0.45 && threat && r < 0.45) f.intent = "space"; // create breathing room
+            else if (enemyHpRatio < 0.3 && canAttackSoon && r < 0.78) f.intent = "approach"; // close out the kill
             else if (!canAttackSoon) f.intent = r < 0.5 ? "space" : "bait"; // stall while on cooldown
-            else if (r < 0.5) f.intent = "approach";
-            else if (r < 0.78) f.intent = "space";
+            else if (r < 0.55) f.intent = "approach";
+            else if (r < 0.8) f.intent = "space";
             else f.intent = "bait";
-            f.intentTimer = 0.5 + Math.random() * 0.6;
+            f.intentTimer = 0.4 + Math.random() * 0.5; // shorter — re-evaluate sooner
           }
 
 
