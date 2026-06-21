@@ -963,6 +963,16 @@ function Game() {
       effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
     }
 
+    // ===== Damage number floats =====
+    if (damageNumsRef.current.length) {
+      for (const n of damageNumsRef.current) {
+        n.life -= dt;
+        n.y += n.vy * dt;
+        n.vy += 60 * dt; // soften upward rise
+      }
+      damageNumsRef.current = damageNumsRef.current.filter((n) => n.life > 0);
+    }
+
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
 
