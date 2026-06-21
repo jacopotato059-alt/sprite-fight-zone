@@ -208,7 +208,7 @@ interface Fighter {
   shotsLeft: number; shotTimer: number; shotTarget?: number;
   // Yuji / Sukuna
   possessed: boolean;
-  windupKind?: "divergent" | "dismantle";
+  windupKind?: "divergent" | "dismantle" | "detroit";
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
