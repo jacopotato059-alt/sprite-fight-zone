@@ -318,10 +318,10 @@ function Game() {
     playSound(SOUNDS.click, 0.5);
   }, []);
 
-  const spawnEffect = (kind: "bluefire" | "blackflash", x: number, y: number) => {
+  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5) => {
     effectsRef.current.push({
       uid: nextUid(), kind, x, y,
-      life: 0.5, maxLife: 0.5, seed: Math.random() * 1000,
+      life, maxLife: life, seed: Math.random() * 1000,
     });
   };
 
