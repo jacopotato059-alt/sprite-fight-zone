@@ -1566,6 +1566,19 @@ function Game() {
               }} />
             );
           }
+          if (e.kind === "greenfire") {
+            const size = 36 + t * 64;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(220,255,230,0.95) 0%, rgba(80,255,160,0.85) 30%, rgba(20,200,140,0.55) 60%, rgba(0,80,40,0) 78%)",
+                boxShadow: `0 0 ${16 * fade}px rgba(80,255,160,0.95), 0 0 ${30 * fade}px rgba(30,200,140,0.75)`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
