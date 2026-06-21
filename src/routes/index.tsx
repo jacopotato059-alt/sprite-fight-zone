@@ -1262,6 +1262,16 @@ function Game() {
                 transform: `scaleX(${Math.sign(p.vx) || 1})`,
                 filter: "drop-shadow(0 0 6px rgba(180,30,40,0.8)) brightness(0.95)",
               }} />
+          ) : p.kind === "clash" ? (
+            <div key={p.uid} className="absolute pointer-events-none"
+              style={{
+                left: p.x - 14, top: p.y - 4,
+                width: 28, height: 8,
+                background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, #fff 35%, #ffb0b0 70%, rgba(180,30,40,0) 100%)",
+                transform: `scaleX(${Math.sign(p.vx) || 1}) skewX(-20deg)`,
+                filter: "drop-shadow(0 0 6px rgba(220,60,80,0.85))",
+                borderRadius: 4,
+              }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
               style={{
