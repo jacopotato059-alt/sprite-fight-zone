@@ -1267,7 +1267,52 @@ function Game() {
               }} />
             );
           }
-          // Black Flash: animated black lightning bolts with glowing red outline
+          if (e.kind === "cut") {
+            // Slash gash + a few blood droplets flung outward
+            const angle = (e.seed % 180) - 90; // deg
+            const len = 36 + (e.seed % 18);
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x, top: e.y, opacity: fade,
+              }}>
+                <div className="absolute" style={{
+                  left: -len / 2, top: -2,
+                  width: len, height: 4,
+                  background: "linear-gradient(90deg, rgba(120,0,0,0) 0%, #c01a1a 30%, #ff3333 50%, #c01a1a 70%, rgba(120,0,0,0) 100%)",
+                  transform: `rotate(${angle}deg)`,
+                  boxShadow: "0 0 6px rgba(200,20,20,0.9)",
+                  borderRadius: 2,
+                }} />
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const a = ((e.seed + i * 47) % 360) * Math.PI / 180;
+                  const dist = 6 + t * (16 + (i * 3));
+                  const sz = 3 + ((e.seed + i) % 3);
+                  return (
+                    <div key={i} className="absolute" style={{
+                      left: Math.cos(a) * dist - sz / 2,
+                      top: Math.sin(a) * dist - sz / 2 + t * 6,
+                      width: sz, height: sz, borderRadius: "50%",
+                      background: i % 2 ? "#a01010" : "#d61f1f",
+                      boxShadow: "0 0 3px rgba(160,0,0,0.8)",
+                    }} />
+                  );
+                })}
+              </div>
+            );
+          }
+          if (e.kind === "counterburst") {
+            const size = 30 + t * 90;
+            return (
+              <div key={e.uid} className="absolute pointer-events-none" style={{
+                left: e.x - size / 2, top: e.y - size / 2,
+                width: size, height: size, borderRadius: "50%",
+                opacity: fade,
+                background: "radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(220,235,255,0.7) 40%, rgba(160,200,255,0) 75%)",
+                boxShadow: `0 0 ${20 * fade}px #fff, 0 0 ${40 * fade}px #cfe6ff`,
+                mixBlendMode: "screen",
+              }} />
+            );
+          }
           const bolts = 5;
           return (
             <div key={e.uid} className="absolute pointer-events-none" style={{
