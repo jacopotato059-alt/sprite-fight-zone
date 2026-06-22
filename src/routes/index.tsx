@@ -1074,13 +1074,13 @@ function Game() {
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
-              // Sukuna — Dismantle: linear, fast, piercing slash (save it — long CD)
-              if (tryUse(0) && !enemyBleeding && dist > MELEE_RANGE * 0.6 && dist < w * 0.95) {
-                f.state = "windup"; f.stateTimer = 0.16;
+              // Sukuna — Dismantle: 0.9s CD slash. Every 3rd slash empowered (Malevolent Shrine passive).
+              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+                f.state = "windup"; f.stateTimer = 0.12;
                 f.windupKind = "dismantle"; f.windupGrow = 0;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                f.abilityCd[0] = 15; f.globalCd = 0.4;
+                f.abilityCd[0] = 0.9; f.globalCd = 0.25;
                 continue;
               }
             }
