@@ -1422,9 +1422,9 @@ function Game() {
           if (p.kind === "dismantle") {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.knife, 0.7);
-            // Bleed: 2 dmg every 0.1s for 15 cuts (stuns while ticking)
-            t.dots.push({ interval: 0.1, timer: 0.1, ticksLeft: 15, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
-            t.stunned = Math.max(t.stunned, 0.4);
+            // Bleed: 2 dmg every 0.15s for 6 cuts (lighter to fit 0.9s slash cadence)
+            t.dots.push({ interval: 0.15, timer: 0.15, ticksLeft: 6, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            t.stunned = Math.max(t.stunned, 0.2);
             spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.4);
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
