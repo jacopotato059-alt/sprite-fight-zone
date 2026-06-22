@@ -780,16 +780,26 @@ function Game() {
             f.lungeKind = black ? "divergentBlack" : "divergent";
             f.pendingBlack = false;
           } else if (f.windupKind === "dismantle") {
-            // Launch the linear, piercing Dismantle slash
+            // Launch the linear, piercing Dismantle slash. Malevolent Shrine passive:
+            // every 3rd slash is empowered (double pierce + bigger dmg + shrine sfx).
+            f.shrineCount = (f.shrineCount ?? 0) + 1;
+            const shrine = f.shrineCount % 3 === 0;
             const dir = f.facing;
             projectilesRef.current.push({
               uid: nextUid(), ownerUid: f.uid, kind: "dismantle",
               x: f.x + dir * 30, y: f.y - def.height * 0.55,
               vx: dir * DISMANTLE_SPEED, vy: 0,
-              damage: 25, ttl: 1.4, pierceLeft: 2, hitUids: [],
+              damage: shrine ? 45 : 18, ttl: 1.4,
+              pierceLeft: shrine ? 5 : 2, hitUids: [],
             });
-            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
-            f.state = "throw"; f.stateTimer = 0.2;
+            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, shrine ? 1.0 : 0.7);
+            if (shrine) {
+              playSound(SOUNDS.sukunaTransform, 0.45);
+              spawnEffect("cut", f.x + dir * 80, f.y - def.height * 0.55, 0.6);
+              spawnEffect("shockwave", f.x + dir * 60, f.y - 20, 0.5);
+              shakeRef.current = Math.max(shakeRef.current, 0.35);
+            }
+            f.state = "throw"; f.stateTimer = 0.18;
           } else if (f.windupKind === "detroit") {
             // Air freeze ended — dive at nearest enemy with massive force
             const tgt = nearestEnemy(f, fighters);
