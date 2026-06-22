@@ -337,10 +337,14 @@ function Game() {
     const def = FIGHTERS[type];
     const w = sizeRef.current.w || window.innerWidth;
     const x = 120 + Math.random() * Math.max(1, w - 240);
+    const maxHp = Math.round(def.def * hpMultRef.current);
+    // AI difficulty influences reactionDelay at spawn
+    const diff = difficultyRef.current;
+    const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
     fightersRef.current.push({
       uid: nextUid(), type,
       x, y: -100, vx: 0, vy: 0,
-      hp: def.def, maxHp: def.def,
+      hp: maxHp, maxHp,
       facing: Math.random() > 0.5 ? 1 : -1,
       state: "idle", stateTimer: 0,
       abilityCd: def.abilities.map(() => 0.6),
@@ -348,13 +352,12 @@ function Game() {
       hitFlash: 0, bounce: 0, walkPhase: 0,
       onGround: false, jumpCd: 0, jumpsLeft: 2,
       decisionCd: 0, intent: "approach", intentTimer: 0,
-      reactionDelay: 0.12 + Math.random() * 0.18,
+      reactionDelay: baseReact + Math.random() * 0.1,
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       possessed: false, windupGrow: 0, dots: [],
       stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
-
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
