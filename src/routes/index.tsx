@@ -394,10 +394,17 @@ function Game() {
 
   useEffect(() => {
     let raf = 0;
+    // HUD throttle: only force React re-render at ~22fps; sim still runs every frame
+    let hudAccum = 0;
     const loop = (t: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = t;
       const rawDt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
       lastTimeRef.current = t;
+      // Pause freezes sim entirely (no dt advance, no shake decay)
+      if (pausedRef.current) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       // Hitstop: scale simulation dt for that crunchy heavy-hit pause
       let dt = rawDt;
       if (hitstopRef.current > 0) {
@@ -406,9 +413,9 @@ function Game() {
       }
       timeRef.current += dt;
       step(dt);
-      // Screen shake decay + apply to arena transform
-      if (shakeRef.current > 0) {
-        shakeRef.current = Math.max(0, shakeRef.current - rawDt);
+      // Screen shake — exponential decay for smoother feel
+      if (shakeRef.current > 0.001) {
+        shakeRef.current = Math.max(0, shakeRef.current * Math.pow(0.0001, rawDt));
         if (arenaRef.current) {
           const mag = shakeRef.current * 18;
           const ox = (Math.random() - 0.5) * mag;
@@ -418,11 +425,27 @@ function Game() {
       } else if (arenaRef.current && arenaRef.current.style.transform) {
         arenaRef.current.style.transform = "";
       }
-      forceTick((n) => (n + 1) % 1_000_000);
+      hudAccum += rawDt;
+      if (hudAccum >= 0.045) {
+        hudAccum = 0;
+        forceTick((n) => (n + 1) % 1_000_000);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Spacebar = pause/play
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault();
+        setPaused((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const incomingThreat = (f: Fighter) => {
