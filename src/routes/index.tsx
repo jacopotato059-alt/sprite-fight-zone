@@ -1448,9 +1448,35 @@ function Game() {
         if (bleedingFromMe) inDmg = Math.round(inDmg * 1.25);
       }
     }
+    // ===== Dummy Iron Guard — 50% damage reduction while active
+    if (!isDot && target.type === "dummy" && (target.guardActive ?? 0) > 0) {
+      inDmg = Math.round(inDmg * 0.5);
+      spawnEffect("counterburst", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.25);
+    }
+    // ===== David Overclock — +30% damage dealt while active
+    if (!isDot && attackerUid) {
+      const att2 = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att2 && att2.type === "david" && (att2.overclockActive ?? 0) > 0) {
+        inDmg = Math.round(inDmg * 1.3);
+      }
+    }
     // Critical hit: 12% chance on non-dot for +50% dmg
     const crit = !isDot && Math.random() < 0.12;
     const finalDmg = crit ? Math.round(inDmg * 1.5) : inDmg;
+    target.hp -= finalDmg;
+    target.hitFlash = isDot ? 0.15 : 0.25;
+    // ===== Yuji Cursed Reservoir — both attacker (yuji) and victim (yuji) gain a stack
+    if (!isDot) {
+      const att3 = attackerUid ? fightersRef.current.find((x) => x.uid === attackerUid) : null;
+      if (att3 && att3.type === "yuji" && !att3.possessed) {
+        att3.cursedStacks = Math.min(5, (att3.cursedStacks ?? 0) + 1);
+        if ((att3.cursedStacks ?? 0) >= 5) att3.cursedFlashReady = true;
+      }
+      if (target.type === "yuji" && !target.possessed) {
+        target.cursedStacks = Math.min(5, (target.cursedStacks ?? 0) + 1);
+        if ((target.cursedStacks ?? 0) >= 5) target.cursedFlashReady = true;
+      }
+    }
     target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
