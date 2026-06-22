@@ -1005,11 +1005,31 @@ function Game() {
                 triggerReaction(f, "angry");
                 continue;
               }
-              // Divergent Fist — fast windup, grows + tints light blue, then lunges
+              // Yuji — Manji Kick: airborne 5s-CD aerial sub-variant. Fast spinning kick that lunges sideways.
+              f.manjiCd = Math.max(0, (f.manjiCd ?? 0) - dt);
+              if (!f.onGround && (f.manjiCd ?? 0) <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.4) {
+                const kdir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = kdir;
+                f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.4;
+                f.lungeFromX = f.x;
+                f.lungeToX = f.x + kdir * Math.min(LUNGE_DISTANCE * 1.1, dist + 40);
+                f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+                f.lungeDamage = 28;
+                f.lungeKind = "divergent";
+                f.vy = -80;
+                f.manjiCd = 5;
+                f.globalCd = 0.3;
+                playSound(SOUNDS.punchLunge, 0.55);
+                continue;
+              }
+              // Divergent Fist — fast windup, grows + tints light blue, then lunges.
+              // Cursed Reservoir passive: stacks >= 5 auto-empowers to Black Flash.
               if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
-                f.state = "windup"; f.stateTimer = 0.12; // faster preparation
+                const empowered = f.cursedFlashReady === true;
+                f.state = "windup"; f.stateTimer = 0.12;
                 f.windupKind = "divergent"; f.windupGrow = 0;
-                f.pendingBlack = Math.random() < 0.25; // 25% Black Flash
+                f.pendingBlack = empowered ? true : Math.random() < 0.25;
+                if (empowered) { f.cursedFlashReady = false; f.cursedStacks = 0; triggerReaction(f, "angry"); }
                 f.vx = 0;
                 f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
