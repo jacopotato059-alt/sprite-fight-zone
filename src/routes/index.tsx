@@ -214,25 +214,35 @@ interface Fighter {
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
-  stunned: number; // seconds locked out of AI/actions
-  counterActive: number; // Yuji Counter Strike window
-  bodySlamFrom?: number; // uid that launched us as a body slam projectile
+  stunned: number;
+  counterActive: number;
+  bodySlamFrom?: number;
   bodySlamDmg?: number;
-  // Taunt / reactions
   reactionIcon?: { url: string; until: number };
-  tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
+  tauntedBy?: number;
   tauntCd: number;
-  lastDodgedFrom?: number; // uid we just dodged - chance to taunt them
+  lastDodgedFrom?: number;
   lastTrickedFrom?: number;
-  // Deku
   punchStacks?: number;
   punchStackTimer?: number;
   punchPitch?: number;
   punchHitStack?: number;
   aerialIntent?: number;
   whip?: { mode: "enemy" | "wall"; targetUid?: number; wallX?: number; wallY?: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; dragStartY?: number; tipX?: number; tipY?: number; selfStartX?: number; selfStartY?: number };
-  // Passives
-  passiveUsed?: boolean; // one-shot passives (David Adrenaline, Yuji Second Wind, Dummy Rage)
+  passiveUsed?: boolean;
+  // Yuji passive — Cursed Reservoir
+  cursedStacks?: number;
+  cursedFlashReady?: boolean;
+  // Sukuna passive — Malevolent Shrine
+  shrineCount?: number;
+  // Dummy — Iron Guard sub-variant
+  guardCd?: number;
+  guardActive?: number;
+  // David — Overclock sub-variant
+  overclockCd?: number;
+  overclockActive?: number;
+  // Yuji — Manji Kick aerial
+  manjiCd?: number;
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
@@ -281,12 +291,23 @@ function hueAt(t: number) {
   return (a + d * f + 360) % 360;
 }
 
+type AiDifficulty = "easy" | "normal" | "hard" | "insane";
+
 function Game() {
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
   const [showStats, setShowStats] = useState(false);
   const [debugAi, setDebugAi] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
+  const [hpMult, setHpMult] = useState(1);
   const [, forceTick] = useState(0);
+  const pausedRef = useRef(false);
+  const difficultyRef = useRef<AiDifficulty>("normal");
+  const hpMultRef = useRef(1);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
+  useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
@@ -316,10 +337,14 @@ function Game() {
     const def = FIGHTERS[type];
     const w = sizeRef.current.w || window.innerWidth;
     const x = 120 + Math.random() * Math.max(1, w - 240);
+    const maxHp = Math.round(def.def * hpMultRef.current);
+    // AI difficulty influences reactionDelay at spawn
+    const diff = difficultyRef.current;
+    const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
     fightersRef.current.push({
       uid: nextUid(), type,
       x, y: -100, vx: 0, vy: 0,
-      hp: def.def, maxHp: def.def,
+      hp: maxHp, maxHp,
       facing: Math.random() > 0.5 ? 1 : -1,
       state: "idle", stateTimer: 0,
       abilityCd: def.abilities.map(() => 0.6),
@@ -327,13 +352,12 @@ function Game() {
       hitFlash: 0, bounce: 0, walkPhase: 0,
       onGround: false, jumpCd: 0, jumpsLeft: 2,
       decisionCd: 0, intent: "approach", intentTimer: 0,
-      reactionDelay: 0.12 + Math.random() * 0.18,
+      reactionDelay: baseReact + Math.random() * 0.1,
       sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
       shotsLeft: 0, shotTimer: 0,
       possessed: false, windupGrow: 0, dots: [],
       stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
-
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
@@ -370,10 +394,17 @@ function Game() {
 
   useEffect(() => {
     let raf = 0;
+    // HUD throttle: only force React re-render at ~22fps; sim still runs every frame
+    let hudAccum = 0;
     const loop = (t: number) => {
       if (!lastTimeRef.current) lastTimeRef.current = t;
       const rawDt = Math.min(0.05, (t - lastTimeRef.current) / 1000);
       lastTimeRef.current = t;
+      // Pause freezes sim entirely (no dt advance, no shake decay)
+      if (pausedRef.current) {
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       // Hitstop: scale simulation dt for that crunchy heavy-hit pause
       let dt = rawDt;
       if (hitstopRef.current > 0) {
@@ -382,9 +413,9 @@ function Game() {
       }
       timeRef.current += dt;
       step(dt);
-      // Screen shake decay + apply to arena transform
-      if (shakeRef.current > 0) {
-        shakeRef.current = Math.max(0, shakeRef.current - rawDt);
+      // Screen shake — exponential decay for smoother feel
+      if (shakeRef.current > 0.001) {
+        shakeRef.current = Math.max(0, shakeRef.current * Math.pow(0.0001, rawDt));
         if (arenaRef.current) {
           const mag = shakeRef.current * 18;
           const ox = (Math.random() - 0.5) * mag;
@@ -394,11 +425,27 @@ function Game() {
       } else if (arenaRef.current && arenaRef.current.style.transform) {
         arenaRef.current.style.transform = "";
       }
-      forceTick((n) => (n + 1) % 1_000_000);
+      hudAccum += rawDt;
+      if (hudAccum >= 0.045) {
+        hudAccum = 0;
+        forceTick((n) => (n + 1) % 1_000_000);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Spacebar = pause/play
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
+        e.preventDefault();
+        setPaused((p) => !p);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const incomingThreat = (f: Fighter) => {
@@ -486,6 +533,11 @@ function Game() {
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       f.stunned = Math.max(0, f.stunned - dt);
       f.counterActive = Math.max(0, f.counterActive - dt);
+      if (f.guardActive !== undefined) f.guardActive = Math.max(0, f.guardActive - dt);
+      if (f.guardCd !== undefined) f.guardCd = Math.max(0, f.guardCd - dt);
+      if (f.overclockActive !== undefined) f.overclockActive = Math.max(0, f.overclockActive - dt);
+      if (f.overclockCd !== undefined) f.overclockCd = Math.max(0, f.overclockCd - dt);
+      if (f.manjiCd !== undefined) f.manjiCd = Math.max(0, f.manjiCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       // ===== Damage-over-time (Sukuna Dismantle bleed) =====
@@ -733,16 +785,26 @@ function Game() {
             f.lungeKind = black ? "divergentBlack" : "divergent";
             f.pendingBlack = false;
           } else if (f.windupKind === "dismantle") {
-            // Launch the linear, piercing Dismantle slash
+            // Launch the linear, piercing Dismantle slash. Malevolent Shrine passive:
+            // every 3rd slash is empowered (double pierce + bigger dmg + shrine sfx).
+            f.shrineCount = (f.shrineCount ?? 0) + 1;
+            const shrine = f.shrineCount % 3 === 0;
             const dir = f.facing;
             projectilesRef.current.push({
               uid: nextUid(), ownerUid: f.uid, kind: "dismantle",
               x: f.x + dir * 30, y: f.y - def.height * 0.55,
               vx: dir * DISMANTLE_SPEED, vy: 0,
-              damage: 25, ttl: 1.4, pierceLeft: 2, hitUids: [],
+              damage: shrine ? 45 : 18, ttl: 1.4,
+              pierceLeft: shrine ? 5 : 2, hitUids: [],
             });
-            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, 0.8);
-            f.state = "throw"; f.stateTimer = 0.2;
+            playSound(Math.random() < 0.5 ? SOUNDS.dismantle1 : SOUNDS.dismantle2, shrine ? 1.0 : 0.7);
+            if (shrine) {
+              playSound(SOUNDS.sukunaTransform, 0.45);
+              spawnEffect("cut", f.x + dir * 80, f.y - def.height * 0.55, 0.6);
+              spawnEffect("shockwave", f.x + dir * 60, f.y - 20, 0.5);
+              shakeRef.current = Math.max(shakeRef.current, 0.35);
+            }
+            f.state = "throw"; f.stateTimer = 0.18;
           } else if (f.windupKind === "detroit") {
             // Air freeze ended — dive at nearest enemy with massive force
             const tgt = nearestEnemy(f, fighters);
@@ -849,7 +911,8 @@ function Game() {
 
           // Battle IQ - intent selection (faster, smarter decisions)
           if (f.decisionCd <= 0) {
-            f.decisionCd = 0.10 + Math.random() * 0.12;
+            const dscale = difficultyRef.current === "easy" ? 3 : difficultyRef.current === "normal" ? 1.4 : difficultyRef.current === "hard" ? 0.8 : 0.4;
+            f.decisionCd = (0.10 + Math.random() * 0.12) * dscale;
             const r = Math.random();
             const enemyBusy = enemy.state === "lunge" || enemy.state === "throw" || enemy.state === "shoot" || enemy.state === "hurt" || enemy.state === "taunt";
             const enemyWindup = enemy.state === "windup";
@@ -875,6 +938,16 @@ function Game() {
           const tryUse = (idx: number) => f.abilityCd[idx] <= 0 && f.globalCd <= 0;
 
           if (isDavid) {
+            // David — Overclock (22s CD): burst speed + +30% dmg for 4s. Pop when threatened or pushing kill.
+            if ((f.overclockCd ?? 0) <= 0 && (f.overclockActive ?? 0) <= 0 && f.globalCd <= 0
+                && (hpRatio < 0.5 || (enemy.hp / enemy.maxHp) < 0.4 || (enemy.state === "lunge" && dist < 250))) {
+              f.overclockActive = 4;
+              f.overclockCd = 22;
+              f.globalCd = 0.3;
+              startSande(f, 0.4, "short");
+              triggerReaction(f, "angry");
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
+            }
             // While Sandevistan is ACTIVE: free fast normal-style punches (no extra CD on the status itself)
             if (f.sandeActive > 0 && f.sandeAttackCd <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.1) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
@@ -882,7 +955,7 @@ function Game() {
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
               f.lungeDamage = 25; // normal punch damage during sandevistan
-              f.sandeAttackCd = 0.45;
+              f.sandeAttackCd = (f.overclockActive ?? 0) > 0 ? 0.3 : 0.45;
               f.globalCd = 0.25;
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
@@ -948,11 +1021,31 @@ function Game() {
                 triggerReaction(f, "angry");
                 continue;
               }
-              // Divergent Fist — fast windup, grows + tints light blue, then lunges
+              // Yuji — Manji Kick: airborne 5s-CD aerial sub-variant. Fast spinning kick that lunges sideways.
+              f.manjiCd = Math.max(0, (f.manjiCd ?? 0) - dt);
+              if (!f.onGround && (f.manjiCd ?? 0) <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.4) {
+                const kdir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
+                f.facing = kdir;
+                f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 2.4;
+                f.lungeFromX = f.x;
+                f.lungeToX = f.x + kdir * Math.min(LUNGE_DISTANCE * 1.1, dist + 40);
+                f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
+                f.lungeDamage = 28;
+                f.lungeKind = "divergent";
+                f.vy = -80;
+                f.manjiCd = 5;
+                f.globalCd = 0.3;
+                playSound(SOUNDS.punchLunge, 0.55);
+                continue;
+              }
+              // Divergent Fist — fast windup, grows + tints light blue, then lunges.
+              // Cursed Reservoir passive: stacks >= 5 auto-empowers to Black Flash.
               if (tryUse(0) && dist < LUNGE_DISTANCE * 1.15 && dist > MELEE_RANGE * 0.3 && (f.intent === "approach" || f.intent === "punish" || dist < MELEE_RANGE * 1.3)) {
-                f.state = "windup"; f.stateTimer = 0.12; // faster preparation
+                const empowered = f.cursedFlashReady === true;
+                f.state = "windup"; f.stateTimer = 0.12;
                 f.windupKind = "divergent"; f.windupGrow = 0;
-                f.pendingBlack = Math.random() < 0.25; // 25% Black Flash
+                f.pendingBlack = empowered ? true : Math.random() < 0.25;
+                if (empowered) { f.cursedFlashReady = false; f.cursedStacks = 0; triggerReaction(f, "angry"); }
                 f.vx = 0;
                 f.abilityCd[0] = 3; f.globalCd = 0.3;
                 continue;
@@ -995,7 +1088,7 @@ function Game() {
             } else {
               // Sukuna — kite at mid-range: if enemy is right on top, prefer space
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
-              const enemyBleeding = enemy.dots.some((d) => d.ownerUid === f.uid);
+              
               // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
               // Sub-variant: "Twin Clash" — when enemy is busy/airborne, fire a high+low pair
               if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
@@ -1027,13 +1120,13 @@ function Game() {
                 playSound(SOUNDS.throwSwing, 0.5);
                 continue;
               }
-              // Sukuna — Dismantle: linear, fast, piercing slash (save it — long CD)
-              if (tryUse(0) && !enemyBleeding && dist > MELEE_RANGE * 0.6 && dist < w * 0.95) {
-                f.state = "windup"; f.stateTimer = 0.16;
+              // Sukuna — Dismantle: 0.9s CD slash. Every 3rd slash empowered (Malevolent Shrine passive).
+              if (tryUse(0) && dist > MELEE_RANGE * 0.4 && dist < w * 0.95) {
+                f.state = "windup"; f.stateTimer = 0.12;
                 f.windupKind = "dismantle"; f.windupGrow = 0;
                 const dir = (Math.sign(enemy.x - f.x) || f.facing) as 1 | -1;
                 f.facing = dir; f.vx = 0;
-                f.abilityCd[0] = 15; f.globalCd = 0.4;
+                f.abilityCd[0] = 0.9; f.globalCd = 0.25;
                 continue;
               }
             }
@@ -1132,6 +1225,16 @@ function Game() {
               continue;
             }
           } else {
+            // Dummy — Iron Guard (12s CD): pop 50% damage reduction for 2.5s when threatened.
+            const aboutToHitDummy = (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.9)
+              || (enemy.state === "windup" && dist < LUNGE_DISTANCE * 1.1)
+              || (threat?.kind === "proj" && threat.urgent);
+            if ((f.guardCd ?? 0) <= 0 && (f.guardActive ?? 0) <= 0 && aboutToHitDummy) {
+              f.guardActive = 2.5; f.guardCd = 12;
+              triggerReaction(f, "angry");
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.5);
+              playSound(SOUNDS.punchHit, 0.45);
+            }
             // Dummy abilities — with "Rage" sub-variant when low HP
             const dummyRage = hpRatio < 0.35;
             // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
@@ -1319,9 +1422,9 @@ function Game() {
           if (p.kind === "dismantle") {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.knife, 0.7);
-            // Bleed: 2 dmg every 0.1s for 15 cuts (stuns while ticking)
-            t.dots.push({ interval: 0.1, timer: 0.1, ticksLeft: 15, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
-            t.stunned = Math.max(t.stunned, 0.4);
+            // Bleed: 2 dmg every 0.15s for 6 cuts (lighter to fit 0.9s slash cadence)
+            t.dots.push({ interval: 0.15, timer: 0.15, ticksLeft: 6, dmg: 2, fromFacing: Math.sign(p.vx) as 1 | -1, ownerUid: p.ownerUid });
+            t.stunned = Math.max(t.stunned, 0.2);
             spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.4);
             p.hitUids?.push(t.uid);
             p.pierceLeft = (p.pierceLeft ?? 1) - 1;
@@ -1345,6 +1448,7 @@ function Game() {
     if (effectsRef.current.length) {
       for (const e of effectsRef.current) e.life -= dt;
       effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
+      if (effectsRef.current.length > 90) effectsRef.current.splice(0, effectsRef.current.length - 90);
     }
 
     // ===== Damage number floats =====
@@ -1352,10 +1456,14 @@ function Game() {
       for (const n of damageNumsRef.current) {
         n.life -= dt;
         n.y += n.vy * dt;
-        n.vy += 60 * dt; // soften upward rise
+        n.vy += 60 * dt;
       }
       damageNumsRef.current = damageNumsRef.current.filter((n) => n.life > 0);
+      if (damageNumsRef.current.length > 40) damageNumsRef.current.splice(0, damageNumsRef.current.length - 40);
     }
+
+    // Perf cap projectiles
+    if (projectilesRef.current.length > 40) projectilesRef.current.splice(0, projectilesRef.current.length - 40);
 
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
@@ -1371,9 +1479,35 @@ function Game() {
         if (bleedingFromMe) inDmg = Math.round(inDmg * 1.25);
       }
     }
+    // ===== Dummy Iron Guard — 50% damage reduction while active
+    if (!isDot && target.type === "dummy" && (target.guardActive ?? 0) > 0) {
+      inDmg = Math.round(inDmg * 0.5);
+      spawnEffect("counterburst", target.x, target.y - FIGHTERS[target.type].height * 0.55, 0.25);
+    }
+    // ===== David Overclock — +30% damage dealt while active
+    if (!isDot && attackerUid) {
+      const att2 = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att2 && att2.type === "david" && (att2.overclockActive ?? 0) > 0) {
+        inDmg = Math.round(inDmg * 1.3);
+      }
+    }
     // Critical hit: 12% chance on non-dot for +50% dmg
     const crit = !isDot && Math.random() < 0.12;
     const finalDmg = crit ? Math.round(inDmg * 1.5) : inDmg;
+    target.hp -= finalDmg;
+    target.hitFlash = isDot ? 0.15 : 0.25;
+    // ===== Yuji Cursed Reservoir — both attacker (yuji) and victim (yuji) gain a stack
+    if (!isDot) {
+      const att3 = attackerUid ? fightersRef.current.find((x) => x.uid === attackerUid) : null;
+      if (att3 && att3.type === "yuji" && !att3.possessed) {
+        att3.cursedStacks = Math.min(5, (att3.cursedStacks ?? 0) + 1);
+        if ((att3.cursedStacks ?? 0) >= 5) att3.cursedFlashReady = true;
+      }
+      if (target.type === "yuji" && !target.possessed) {
+        target.cursedStacks = Math.min(5, (target.cursedStacks ?? 0) + 1);
+        if ((target.cursedStacks ?? 0) >= 5) target.cursedFlashReady = true;
+      }
+    }
     target.hp -= finalDmg;
     target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
@@ -1529,15 +1663,80 @@ function Game() {
     setShowStats(false);
   };
 
+  // Duel test mode: clear arena, spawn selected vs a random other roster pick.
+  const startDuel = useCallback((a: FighterTypeId, b: FighterTypeId) => {
+    fightersRef.current = [];
+    projectilesRef.current = [];
+    effectsRef.current = [];
+    damageNumsRef.current = [];
+    setPaused(false);
+    playSound(SOUNDS.click, 0.5);
+    // Manually spawn at opposite sides
+    const w = sizeRef.current.w || window.innerWidth;
+    const diff = difficultyRef.current;
+    const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
+    const make = (type: FighterTypeId, x: number, facing: 1 | -1): Fighter => {
+      const d = FIGHTERS[type];
+      const maxHp = Math.round(d.def * hpMultRef.current);
+      return {
+        uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
+        hp: maxHp, maxHp, facing,
+        state: "idle", stateTimer: 0,
+        abilityCd: d.abilities.map(() => 0.6),
+        globalCd: 0.4, hitFlash: 0, bounce: 0, walkPhase: 0,
+        onGround: false, jumpCd: 0, jumpsLeft: 2,
+        decisionCd: 0, intent: "approach", intentTimer: 0,
+        reactionDelay: baseReact + Math.random() * 0.1,
+        sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
+        shotsLeft: 0, shotTimer: 0,
+        possessed: false, windupGrow: 0, dots: [],
+        stunned: 0, counterActive: 0,
+        tauntCd: 1 + Math.random() * 2,
+      };
+    };
+    fightersRef.current.push(make(a, w * 0.25, 1));
+    fightersRef.current.push(make(b, w * 0.75, -1));
+    playSound(SOUNDS.spawn, 0.5);
+  }, []);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
-      <div className="absolute top-4 right-4 z-30 flex gap-3">
+      <div className="absolute top-4 right-4 z-30 flex gap-2 flex-wrap justify-end" style={{ maxWidth: "70vw" }}>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setPaused((p) => !p); }} style={{ background: paused ? "#3a6a3a" : undefined }}>
+          {paused ? "▶ Play" : "❚❚ Pause"}
+        </button>
+        <select
+          value={difficulty}
+          onChange={(e) => { playSound(SOUNDS.click, 0.4); setDifficulty(e.target.value as AiDifficulty); }}
+          className="mc-btn"
+          style={{ fontFamily: "Chakra Petch", fontWeight: 700, letterSpacing: 1, padding: "6px 10px" }}
+          title="AI difficulty"
+        >
+          <option value="easy">AI: EASY</option>
+          <option value="normal">AI: NORMAL</option>
+          <option value="hard">AI: HARD</option>
+          <option value="insane">AI: INSANE</option>
+        </select>
+        <div className="mc-btn flex items-center gap-2" style={{ cursor: "default", padding: "6px 10px" }}>
+          <span style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11 }}>HP {hpMult.toFixed(1)}x</span>
+          <input type="range" min={0.5} max={3} step={0.1} value={hpMult}
+            onChange={(e) => setHpMult(parseFloat(e.target.value))}
+            style={{ width: 90 }} />
+        </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
           {debugAi ? "Debug: ON" : "Debug: OFF"}
         </button>
         <button className="mc-btn danger" onClick={restart}>Restart</button>
       </div>
+
+      {paused && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div className="px-6 py-3" style={{ background: "rgba(0,0,0,0.7)", border: "2px solid #fff", fontFamily: "Chakra Petch", fontWeight: 800, fontSize: 28, color: "#fff", letterSpacing: 4 }}>
+            PAUSED
+          </div>
+        </div>
+      )}
 
       <h1 className="absolute top-5 left-5 z-30 title-text text-[14px] text-white/70">
         Ani Fighters
@@ -2173,7 +2372,18 @@ function Game() {
                     }}>
                     Spawn In ({fighterCounts[selectedSlot] ?? 0}/3)
                   </button>
-                  <button className="mc-btn small"
+                  <div className="flex flex-col items-center gap-2 mt-2 pt-3" style={{ borderTop: "1px solid #333", width: "100%" }}>
+                    <div style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11, color: "#c6c6c6", letterSpacing: 2 }}>DUEL TEST MODE</div>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {(Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot).map((opp) => (
+                        <button key={opp} className="mc-btn small"
+                          onClick={() => { startDuel(selectedSlot, opp); setShowFighters(false); }}>
+                          VS {FIGHTERS[opp].name.split(" ")[0].toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="mc-btn small mt-2"
                     onClick={() => { playSound(SOUNDS.click, 0.4); setShowStats(true); }}>
                     Stats
                   </button>
