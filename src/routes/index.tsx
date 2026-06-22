@@ -533,6 +533,11 @@ function Game() {
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       f.stunned = Math.max(0, f.stunned - dt);
       f.counterActive = Math.max(0, f.counterActive - dt);
+      if (f.guardActive !== undefined) f.guardActive = Math.max(0, f.guardActive - dt);
+      if (f.guardCd !== undefined) f.guardCd = Math.max(0, f.guardCd - dt);
+      if (f.overclockActive !== undefined) f.overclockActive = Math.max(0, f.overclockActive - dt);
+      if (f.overclockCd !== undefined) f.overclockCd = Math.max(0, f.overclockCd - dt);
+      if (f.manjiCd !== undefined) f.manjiCd = Math.max(0, f.manjiCd - dt);
       if (f.reactionIcon && f.reactionIcon.until < timeRef.current) f.reactionIcon = undefined;
 
       // ===== Damage-over-time (Sukuna Dismantle bleed) =====
