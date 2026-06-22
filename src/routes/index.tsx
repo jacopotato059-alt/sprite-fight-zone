@@ -2372,7 +2372,18 @@ function Game() {
                     }}>
                     Spawn In ({fighterCounts[selectedSlot] ?? 0}/3)
                   </button>
-                  <button className="mc-btn small"
+                  <div className="flex flex-col items-center gap-2 mt-2 pt-3" style={{ borderTop: "1px solid #333", width: "100%" }}>
+                    <div style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11, color: "#c6c6c6", letterSpacing: 2 }}>DUEL TEST MODE</div>
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {(Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot).map((opp) => (
+                        <button key={opp} className="mc-btn small"
+                          onClick={() => { startDuel(selectedSlot, opp); setShowFighters(false); }}>
+                          VS {FIGHTERS[opp].name.split(" ")[0].toUpperCase()}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="mc-btn small mt-2"
                     onClick={() => { playSound(SOUNDS.click, 0.4); setShowStats(true); }}>
                     Stats
                   </button>
