@@ -911,7 +911,8 @@ function Game() {
 
           // Battle IQ - intent selection (faster, smarter decisions)
           if (f.decisionCd <= 0) {
-            f.decisionCd = 0.10 + Math.random() * 0.12;
+            const dscale = difficultyRef.current === "easy" ? 3 : difficultyRef.current === "normal" ? 1.4 : difficultyRef.current === "hard" ? 0.8 : 0.4;
+            f.decisionCd = (0.10 + Math.random() * 0.12) * dscale;
             const r = Math.random();
             const enemyBusy = enemy.state === "lunge" || enemy.state === "throw" || enemy.state === "shoot" || enemy.state === "hurt" || enemy.state === "taunt";
             const enemyWindup = enemy.state === "windup";
