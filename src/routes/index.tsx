@@ -1448,6 +1448,7 @@ function Game() {
     if (effectsRef.current.length) {
       for (const e of effectsRef.current) e.life -= dt;
       effectsRef.current = effectsRef.current.filter((e) => e.life > 0);
+      if (effectsRef.current.length > 90) effectsRef.current.splice(0, effectsRef.current.length - 90);
     }
 
     // ===== Damage number floats =====
@@ -1455,10 +1456,14 @@ function Game() {
       for (const n of damageNumsRef.current) {
         n.life -= dt;
         n.y += n.vy * dt;
-        n.vy += 60 * dt; // soften upward rise
+        n.vy += 60 * dt;
       }
       damageNumsRef.current = damageNumsRef.current.filter((n) => n.life > 0);
+      if (damageNumsRef.current.length > 40) damageNumsRef.current.splice(0, damageNumsRef.current.length - 40);
     }
+
+    // Perf cap projectiles
+    if (projectilesRef.current.length > 40) projectilesRef.current.splice(0, projectilesRef.current.length - 40);
 
     fightersRef.current = fightersRef.current.filter((f) => f.state !== "dead");
   };
