@@ -1088,7 +1088,7 @@ function Game() {
             } else {
               // Sukuna — kite at mid-range: if enemy is right on top, prefer space
               if (dist < MELEE_RANGE * 0.7) { f.intent = "retreat"; f.intentTimer = 0.6; }
-              void enemy.dots.some((d) => d.ownerUid === f.uid);
+              
               // Sukuna — Clash: rebalanced basic projectile, 2.5s CD, 18 dmg
               // Sub-variant: "Twin Clash" — when enemy is busy/airborne, fire a high+low pair
               if (tryUse(1) && dist > MELEE_RANGE * 0.9 && dist < w * 0.9) {
