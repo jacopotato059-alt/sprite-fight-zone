@@ -1224,6 +1224,16 @@ function Game() {
               continue;
             }
           } else {
+            // Dummy — Iron Guard (12s CD): pop 50% damage reduction for 2.5s when threatened.
+            const aboutToHitDummy = (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.9)
+              || (enemy.state === "windup" && dist < LUNGE_DISTANCE * 1.1)
+              || (threat?.kind === "proj" && threat.urgent);
+            if ((f.guardCd ?? 0) <= 0 && (f.guardActive ?? 0) <= 0 && aboutToHitDummy) {
+              f.guardActive = 2.5; f.guardCd = 12;
+              triggerReaction(f, "angry");
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.5);
+              playSound(SOUNDS.punchHit, 0.45);
+            }
             // Dummy abilities — with "Rage" sub-variant when low HP
             const dummyRage = hpRatio < 0.35;
             // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
