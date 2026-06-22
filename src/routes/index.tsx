@@ -214,25 +214,35 @@ interface Fighter {
   windupGrow: number; // 0..1 visual grow/tint progress during windup
   pendingBlack?: boolean;
   dots: { interval: number; timer: number; ticksLeft: number; dmg: number; fromFacing: 1 | -1; ownerUid?: number }[];
-  stunned: number; // seconds locked out of AI/actions
-  counterActive: number; // Yuji Counter Strike window
-  bodySlamFrom?: number; // uid that launched us as a body slam projectile
+  stunned: number;
+  counterActive: number;
+  bodySlamFrom?: number;
   bodySlamDmg?: number;
-  // Taunt / reactions
   reactionIcon?: { url: string; until: number };
-  tauntedBy?: number; // uid that taunted this one (makes them angry/focused)
+  tauntedBy?: number;
   tauntCd: number;
-  lastDodgedFrom?: number; // uid we just dodged - chance to taunt them
+  lastDodgedFrom?: number;
   lastTrickedFrom?: number;
-  // Deku
   punchStacks?: number;
   punchStackTimer?: number;
   punchPitch?: number;
   punchHitStack?: number;
   aerialIntent?: number;
   whip?: { mode: "enemy" | "wall"; targetUid?: number; wallX?: number; wallY?: number; t: number; phase: "extend" | "drag"; sourceY: number; dragStartX?: number; dragStartY?: number; tipX?: number; tipY?: number; selfStartX?: number; selfStartY?: number };
-  // Passives
-  passiveUsed?: boolean; // one-shot passives (David Adrenaline, Yuji Second Wind, Dummy Rage)
+  passiveUsed?: boolean;
+  // Yuji passive — Cursed Reservoir
+  cursedStacks?: number;
+  cursedFlashReady?: boolean;
+  // Sukuna passive — Malevolent Shrine
+  shrineCount?: number;
+  // Dummy — Iron Guard sub-variant
+  guardCd?: number;
+  guardActive?: number;
+  // David — Overclock sub-variant
+  overclockCd?: number;
+  overclockActive?: number;
+  // Yuji — Manji Kick aerial
+  manjiCd?: number;
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
