@@ -1663,15 +1663,80 @@ function Game() {
     setShowStats(false);
   };
 
+  // Duel test mode: clear arena, spawn selected vs a random other roster pick.
+  const startDuel = useCallback((a: FighterTypeId, b: FighterTypeId) => {
+    fightersRef.current = [];
+    projectilesRef.current = [];
+    effectsRef.current = [];
+    damageNumsRef.current = [];
+    setPaused(false);
+    playSound(SOUNDS.click, 0.5);
+    // Manually spawn at opposite sides
+    const w = sizeRef.current.w || window.innerWidth;
+    const diff = difficultyRef.current;
+    const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
+    const make = (type: FighterTypeId, x: number, facing: 1 | -1): Fighter => {
+      const d = FIGHTERS[type];
+      const maxHp = Math.round(d.def * hpMultRef.current);
+      return {
+        uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
+        hp: maxHp, maxHp, facing,
+        state: "idle", stateTimer: 0,
+        abilityCd: d.abilities.map(() => 0.6),
+        globalCd: 0.4, hitFlash: 0, bounce: 0, walkPhase: 0,
+        onGround: false, jumpCd: 0, jumpsLeft: 2,
+        decisionCd: 0, intent: "approach", intentTimer: 0,
+        reactionDelay: baseReact + Math.random() * 0.1,
+        sandeActive: 0, sandeHue: 0, afterTimer: 0, afterImages: [], sandeAttackCd: 0,
+        shotsLeft: 0, shotTimer: 0,
+        possessed: false, windupGrow: 0, dots: [],
+        stunned: 0, counterActive: 0,
+        tauntCd: 1 + Math.random() * 2,
+      };
+    };
+    fightersRef.current.push(make(a, w * 0.25, 1));
+    fightersRef.current.push(make(b, w * 0.75, -1));
+    playSound(SOUNDS.spawn, 0.5);
+  }, []);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
-      <div className="absolute top-4 right-4 z-30 flex gap-3">
+      <div className="absolute top-4 right-4 z-30 flex gap-2 flex-wrap justify-end" style={{ maxWidth: "70vw" }}>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setPaused((p) => !p); }} style={{ background: paused ? "#3a6a3a" : undefined }}>
+          {paused ? "▶ Play" : "❚❚ Pause"}
+        </button>
+        <select
+          value={difficulty}
+          onChange={(e) => { playSound(SOUNDS.click, 0.4); setDifficulty(e.target.value as AiDifficulty); }}
+          className="mc-btn"
+          style={{ fontFamily: "Chakra Petch", fontWeight: 700, letterSpacing: 1, padding: "6px 10px" }}
+          title="AI difficulty"
+        >
+          <option value="easy">AI: EASY</option>
+          <option value="normal">AI: NORMAL</option>
+          <option value="hard">AI: HARD</option>
+          <option value="insane">AI: INSANE</option>
+        </select>
+        <div className="mc-btn flex items-center gap-2" style={{ cursor: "default", padding: "6px 10px" }}>
+          <span style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11 }}>HP {hpMult.toFixed(1)}x</span>
+          <input type="range" min={0.5} max={3} step={0.1} value={hpMult}
+            onChange={(e) => setHpMult(parseFloat(e.target.value))}
+            style={{ width: 90 }} />
+        </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
           {debugAi ? "Debug: ON" : "Debug: OFF"}
         </button>
         <button className="mc-btn danger" onClick={restart}>Restart</button>
       </div>
+
+      {paused && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div className="px-6 py-3" style={{ background: "rgba(0,0,0,0.7)", border: "2px solid #fff", fontFamily: "Chakra Petch", fontWeight: 800, fontSize: 28, color: "#fff", letterSpacing: 4 }}>
+            PAUSED
+          </div>
+        </div>
+      )}
 
       <h1 className="absolute top-5 left-5 z-30 title-text text-[14px] text-white/70">
         Ani Fighters
