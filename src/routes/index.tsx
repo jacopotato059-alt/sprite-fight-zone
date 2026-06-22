@@ -937,6 +937,16 @@ function Game() {
           const tryUse = (idx: number) => f.abilityCd[idx] <= 0 && f.globalCd <= 0;
 
           if (isDavid) {
+            // David — Overclock (22s CD): burst speed + +30% dmg for 4s. Pop when threatened or pushing kill.
+            if ((f.overclockCd ?? 0) <= 0 && (f.overclockActive ?? 0) <= 0 && f.globalCd <= 0
+                && (hpRatio < 0.5 || (enemy.hp / enemy.maxHp) < 0.4 || (enemy.state === "lunge" && dist < 250))) {
+              f.overclockActive = 4;
+              f.overclockCd = 22;
+              f.globalCd = 0.3;
+              startSande(f, 0.4, "short");
+              triggerReaction(f, "angry");
+              spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
+            }
             // While Sandevistan is ACTIVE: free fast normal-style punches (no extra CD on the status itself)
             if (f.sandeActive > 0 && f.sandeAttackCd <= 0 && f.globalCd <= 0 && dist < LUNGE_DISTANCE * 1.1) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3;
@@ -944,7 +954,7 @@ function Game() {
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 40);
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
               f.lungeDamage = 25; // normal punch damage during sandevistan
-              f.sandeAttackCd = 0.45;
+              f.sandeAttackCd = (f.overclockActive ?? 0) > 0 ? 0.3 : 0.45;
               f.globalCd = 0.25;
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
