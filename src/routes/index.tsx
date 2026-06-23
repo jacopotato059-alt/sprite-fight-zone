@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type DuelModifier = "none" | "lowgrav" | "highgrav" | "berserk" | "glass" | "regen" | "speed" | "mirror";
+type DuelModifier = "none" | "glass" | "regen" | "mirror";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
