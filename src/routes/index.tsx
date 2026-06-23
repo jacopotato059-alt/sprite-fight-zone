@@ -1682,7 +1682,11 @@ function Game() {
     const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
     const make = (type: FighterTypeId, x: number, facing: 1 | -1): Fighter => {
       const d = FIGHTERS[type];
-      const maxHp = Math.round(d.def * hpMultRef.current);
+      const mod = duelModRef.current;
+      let hpScale = hpMultRef.current;
+      if (mod === "glass") hpScale *= 0.5;
+      if (mod === "regen") hpScale *= 1.3;
+      const maxHp = Math.round(d.def * hpScale);
       return {
         uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
         hp: maxHp, maxHp, facing,
@@ -1699,6 +1703,8 @@ function Game() {
         tauntCd: 1 + Math.random() * 2,
       };
     };
+    const mod = duelModRef.current;
+    if (mod === "mirror") b = a;
     fightersRef.current.push(make(a, w * 0.25, 1));
     fightersRef.current.push(make(b, w * 0.75, -1));
     playSound(SOUNDS.spawn, 0.5);
