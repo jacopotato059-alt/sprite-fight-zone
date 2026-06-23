@@ -1,5 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+type DuelModifier = "none" | "glass" | "regen" | "mirror";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
@@ -301,13 +303,16 @@ function Game() {
   const [paused, setPaused] = useState(false);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
   const [hpMult, setHpMult] = useState(1);
+  const [duelMod, setDuelMod] = useState<DuelModifier>("none");
   const [, forceTick] = useState(0);
   const pausedRef = useRef(false);
   const difficultyRef = useRef<AiDifficulty>("normal");
   const hpMultRef = useRef(1);
+  const duelModRef = useRef<DuelModifier>("none");
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
+  useEffect(() => { duelModRef.current = duelMod; }, [duelMod]);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
@@ -1677,7 +1682,11 @@ function Game() {
     const baseReact = diff === "easy" ? 0.45 : diff === "normal" ? 0.22 : diff === "hard" ? 0.10 : 0.04;
     const make = (type: FighterTypeId, x: number, facing: 1 | -1): Fighter => {
       const d = FIGHTERS[type];
-      const maxHp = Math.round(d.def * hpMultRef.current);
+      const mod = duelModRef.current;
+      let hpScale = hpMultRef.current;
+      if (mod === "glass") hpScale *= 0.5;
+      if (mod === "regen") hpScale *= 1.3;
+      const maxHp = Math.round(d.def * hpScale);
       return {
         uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
         hp: maxHp, maxHp, facing,
@@ -1694,6 +1703,8 @@ function Game() {
         tauntCd: 1 + Math.random() * 2,
       };
     };
+    const mod = duelModRef.current;
+    if (mod === "mirror") b = a;
     fightersRef.current.push(make(a, w * 0.25, 1));
     fightersRef.current.push(make(b, w * 0.75, -1));
     playSound(SOUNDS.spawn, 0.5);
@@ -1724,6 +1735,9 @@ function Game() {
             style={{ width: 90 }} />
         </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <Link to="/builder" className="mc-btn" style={{ background: "#3b2469", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          Builder
+        </Link>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
           {debugAi ? "Debug: ON" : "Debug: OFF"}
         </button>
@@ -2374,6 +2388,15 @@ function Game() {
                   </button>
                   <div className="flex flex-col items-center gap-2 mt-2 pt-3" style={{ borderTop: "1px solid #333", width: "100%" }}>
                     <div style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11, color: "#c6c6c6", letterSpacing: 2 }}>DUEL TEST MODE</div>
+                    <div className="flex gap-2 items-center">
+                      <span style={{ fontFamily: "Chakra Petch", fontSize: 10, color: "#999" }}>MODIFIER:</span>
+                      <select value={duelMod} onChange={(e) => setDuelMod(e.target.value as DuelModifier)} className="mc-btn small" style={{ padding: "4px 8px", fontFamily: "Chakra Petch", fontSize: 11 }}>
+                        <option value="none">Standard</option>
+                        <option value="glass">Glass Cannon (½ HP)</option>
+                        <option value="regen">Iron Walls (1.3× HP)</option>
+                        <option value="mirror">Mirror Match</option>
+                      </select>
+                    </div>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {(Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot).map((opp) => (
                         <button key={opp} className="mc-btn small"
@@ -2381,6 +2404,15 @@ function Game() {
                           VS {FIGHTERS[opp].name.split(" ")[0].toUpperCase()}
                         </button>
                       ))}
+                      <button className="mc-btn small" style={{ background: "#3b2469" }}
+                        onClick={() => {
+                          const others = (Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot);
+                          const opp = others[Math.floor(Math.random() * others.length)];
+                          startDuel(selectedSlot, opp);
+                          setShowFighters(false);
+                        }}>
+                        VS RANDOM
+                      </button>
                     </div>
                   </div>
                   <button className="mc-btn small mt-2"
