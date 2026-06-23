@@ -1726,6 +1726,9 @@ function Game() {
             style={{ width: 90 }} />
         </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <Link to="/builder" className="mc-btn" style={{ background: "#3b2469", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+          Builder
+        </Link>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setDebugAi((v) => !v); }} style={{ opacity: debugAi ? 1 : 0.7 }}>
           {debugAi ? "Debug: ON" : "Debug: OFF"}
         </button>
