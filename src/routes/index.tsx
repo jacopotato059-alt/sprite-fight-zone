@@ -2388,6 +2388,15 @@ function Game() {
                   </button>
                   <div className="flex flex-col items-center gap-2 mt-2 pt-3" style={{ borderTop: "1px solid #333", width: "100%" }}>
                     <div style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11, color: "#c6c6c6", letterSpacing: 2 }}>DUEL TEST MODE</div>
+                    <div className="flex gap-2 items-center">
+                      <span style={{ fontFamily: "Chakra Petch", fontSize: 10, color: "#999" }}>MODIFIER:</span>
+                      <select value={duelMod} onChange={(e) => setDuelMod(e.target.value as DuelModifier)} className="mc-btn small" style={{ padding: "4px 8px", fontFamily: "Chakra Petch", fontSize: 11 }}>
+                        <option value="none">Standard</option>
+                        <option value="glass">Glass Cannon (½ HP)</option>
+                        <option value="regen">Iron Walls (1.3× HP)</option>
+                        <option value="mirror">Mirror Match</option>
+                      </select>
+                    </div>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {(Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot).map((opp) => (
                         <button key={opp} className="mc-btn small"
@@ -2395,6 +2404,15 @@ function Game() {
                           VS {FIGHTERS[opp].name.split(" ")[0].toUpperCase()}
                         </button>
                       ))}
+                      <button className="mc-btn small" style={{ background: "#3b2469" }}
+                        onClick={() => {
+                          const others = (Object.keys(FIGHTERS) as FighterTypeId[]).filter((t) => t !== selectedSlot);
+                          const opp = others[Math.floor(Math.random() * others.length)];
+                          startDuel(selectedSlot, opp);
+                          setShowFighters(false);
+                        }}>
+                        VS RANDOM
+                      </button>
                     </div>
                   </div>
                   <button className="mc-btn small mt-2"
