@@ -303,13 +303,16 @@ function Game() {
   const [paused, setPaused] = useState(false);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
   const [hpMult, setHpMult] = useState(1);
+  const [duelMod, setDuelMod] = useState<DuelModifier>("none");
   const [, forceTick] = useState(0);
   const pausedRef = useRef(false);
   const difficultyRef = useRef<AiDifficulty>("normal");
   const hpMultRef = useRef(1);
+  const duelModRef = useRef<DuelModifier>("none");
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
+  useEffect(() => { duelModRef.current = duelMod; }, [duelMod]);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
