@@ -2426,7 +2426,20 @@ function Game() {
                   <SlotCard selected={selectedSlot === "deku"}
                     onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot("deku"); }}
                     sprite={FIGHTERS.deku.sprite} name="Deku" />
+                  {customFighters.map((c) => {
+                    const typeId = `custom_${c.id}` as FighterTypeId;
+                    return (
+                      <SlotCard key={typeId} selected={selectedSlot === typeId}
+                        onClick={() => { playSound(SOUNDS.click, 0.4); setSelectedSlot(typeId); }}
+                        sprite={c.spriteDataUrl ?? undefined} name={c.name} />
+                    );
+                  })}
                 </div>
+                {customFighters.length === 0 && (
+                  <div className="mt-3 text-center" style={{ fontFamily: "Chakra Petch", fontSize: 11, color: "#8a8a8a" }}>
+                    Want more fighters? Build your own in the <Link to="/builder" style={{ color: "#b89cff", textDecoration: "underline" }}>Workshop</Link> and click <b>Install to Roster</b>.
+                  </div>
+                )}
 
 
                 <div className="mt-6 flex flex-col gap-3 items-center">
