@@ -295,6 +295,41 @@ function hueAt(t: number) {
 
 type AiDifficulty = "easy" | "normal" | "hard" | "insane";
 
+type CustomFighterInstall = {
+  id: string; name: string; spriteDataUrl: string | null;
+  hp: number; speed: number; defense: number;
+  skills: { name: string; damage: number; cooldown: number; anim: string }[];
+};
+
+function loadInstalledFighters(): CustomFighterInstall[] {
+  try {
+    const raw = localStorage.getItem("anif.installed.v1");
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function registerCustomFighters(list: CustomFighterInstall[]) {
+  for (const c of list) {
+    const typeId = `custom_${c.id}` as FighterTypeId;
+    const meleeSkill = c.skills.find((s) => s.anim !== "projectile") ?? c.skills[0];
+    const rangedSkill = c.skills.find((s) => s.anim === "projectile") ?? c.skills[1] ?? c.skills[0];
+    (FIGHTERS as Record<string, FighterDef>)[typeId] = {
+      id: typeId, name: c.name,
+      sprite: c.spriteDataUrl ?? dummySprite,
+      atk: Math.max(50, meleeSkill?.damage ?? 25),
+      def: Math.max(50, c.hp),
+      speed: Math.max(0.5, Math.min(2.5, c.speed / 220)),
+      abilities: [
+        { name: meleeSkill?.name ?? "Punch", damage: meleeSkill?.damage ?? 25, type: "melee", cooldown: meleeSkill?.cooldown ?? 1.4 },
+        { name: rangedSkill?.name ?? "Throw", damage: rangedSkill?.damage ?? 25, type: "ranged", cooldown: rangedSkill?.cooldown ?? 1.8 },
+      ],
+      width: 64, height: 104,
+    };
+  }
+}
+
 function Game() {
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
@@ -304,6 +339,7 @@ function Game() {
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
+  const [customFighters, setCustomFighters] = useState<CustomFighterInstall[]>([]);
   const [, forceTick] = useState(0);
   const pausedRef = useRef(false);
   const difficultyRef = useRef<AiDifficulty>("normal");
@@ -313,6 +349,22 @@ function Game() {
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
   useEffect(() => { duelModRef.current = duelMod; }, [duelMod]);
+
+  // Load custom fighters from builder; refresh on storage events / when menu opens.
+  useEffect(() => {
+    const load = () => {
+      const list = loadInstalledFighters();
+      registerCustomFighters(list);
+      setCustomFighters(list);
+    };
+    load();
+    const onStorage = (e: StorageEvent) => { if (e.key === "anif.installed.v1") load(); };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  useEffect(() => { if (showFighters) {
+    const list = loadInstalledFighters(); registerCustomFighters(list); setCustomFighters(list);
+  } }, [showFighters]);
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
