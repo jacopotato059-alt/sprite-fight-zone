@@ -42,6 +42,7 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "NPC vs NPC pixel fighting sandbox." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({ duel: typeof s.duel === "string" ? s.duel : undefined }),
   component: Game,
 });
 
@@ -126,10 +127,12 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
+interface CustomSkillMeta { name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
   atk: number; def: number; speed: number;
   abilities: AbilityDef[]; width: number; height: number;
+  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta };
 }
 
 const FIGHTERS: Record<FighterTypeId, FighterDef> = {
@@ -201,7 +204,7 @@ interface Fighter {
   reactionDelay: number;
   // Lunge
   lungeFromX?: number; lungeToX?: number; lungeProgress?: number; lungeHit?: boolean; lungeDamage?: number; lungeFast?: boolean;
-  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "dekuMega" | "detroit";
+  lungeKind?: "normal" | "sandy" | "divergent" | "divergentBlack" | "deku" | "dekuFinal" | "dekuMega" | "detroit" | "custom";
   // David
   sandeActive: number; // seconds remaining
   sandeHue: number;
@@ -295,10 +298,29 @@ function hueAt(t: number) {
 
 type AiDifficulty = "easy" | "normal" | "hard" | "insane";
 
+type CustomSkillInstall = {
+  name: string; damage: number; cooldown: number; anim: string;
+  range?: number; projSpeed?: number; duration?: number;
+  effect?: string; color?: string; sound?: string;
+  hits?: number; knockback?: number; lifesteal?: number; stun?: number;
+};
 type CustomFighterInstall = {
   id: string; name: string; spriteDataUrl: string | null;
   hp: number; speed: number; defense: number;
-  skills: { name: string; damage: number; cooldown: number; anim: string }[];
+  skills: CustomSkillInstall[];
+};
+
+// Map builder effect names to engine Effect kinds
+const EFFECT_MAP: Record<string, Effect["kind"]> = {
+  slash: "cut", crimson: "cut",
+  ring: "shockwave", shockwave: "shockwave", vortex: "shockwave",
+  spark: "counterburst", burst: "counterburst", nova: "counterburst",
+  flame: "greenfire", geyser: "greenfire",
+  lightning: "electric", shock: "electric", chains: "electric",
+  blackflash: "blackflash", blackhole: "blackflash",
+  smoke: "wallspark", trail: "wallspark", feathers: "wallspark",
+  petals: "megaring", stars: "megaring", runes: "megaring",
+  ice: "bluefire",
 };
 
 function loadInstalledFighters(): CustomFighterInstall[] {
@@ -326,6 +348,7 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
         { name: rangedSkill?.name ?? "Throw", damage: rangedSkill?.damage ?? 25, type: "ranged", cooldown: rangedSkill?.cooldown ?? 1.8 },
       ],
       width: 64, height: 104,
+      custom: { melee: meleeSkill, ranged: rangedSkill },
     };
   }
 }
@@ -795,6 +818,34 @@ function Game() {
                   spawnEffect("megaring", hitX, hitY, 0.95);
                   t2.vx = f.facing * 1500; t2.vy = -700;
                   t2.stunned = Math.max(t2.stunned, 0.7);
+                }
+              } else if (f.lungeKind === "custom") {
+                const meta = def.custom?.melee;
+                const fxKind: Effect["kind"] = (meta?.effect ? (EFFECT_MAP[meta.effect] ?? "counterburst") : "counterburst");
+                spawnEffect(fxKind, hitX, hitY, 0.55);
+                if (meta?.effect && (meta.effect === "nova" || meta.effect === "blackhole" || meta.effect === "shockwave")) {
+                  spawnEffect("shockwave", hitX, hitY + 20, 0.7);
+                }
+                // Custom sound — fall back to default punch
+                const url = meta?.sound ? `__custom_${meta.sound}` : undefined;
+                if (url && (FIGHTERS as Record<string, FighterDef>)[f.type]) {
+                  try { const a = new Audio(); a.volume = 0.7; /* sound lookup omitted */ } catch {}
+                }
+                playSound(SOUNDS.punchHit, 0.7);
+                // Multi-hit, knockback, lifesteal, stun
+                const hits = Math.max(1, meta?.hits ?? 1);
+                for (let h = 1; h < hits; h++) {
+                  applyDamage(t2, Math.round((f.lungeDamage ?? meta?.damage ?? 20) * 0.5), f.facing, f.uid);
+                  spawnEffect(fxKind, hitX + (h - 1) * 6, hitY - h * 4, 0.35);
+                }
+                const kb = meta?.knockback ?? 0;
+                if (kb > 0) { t2.vx = f.facing * kb; t2.vy = -Math.min(600, kb * 0.4); t2.onGround = false; }
+                const stun = meta?.stun ?? 0;
+                if (stun > 0) t2.stunned = Math.max(t2.stunned, stun);
+                const ls = meta?.lifesteal ?? 0;
+                if (ls > 0) {
+                  f.hp = Math.min(f.maxHp, f.hp + Math.round((f.lungeDamage ?? 0) * ls));
+                  f.hitFlash = Math.max(f.hitFlash, 0.1);
                 }
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
@@ -1294,14 +1345,20 @@ function Game() {
             }
             // Dummy abilities — with "Rage" sub-variant when low HP
             const dummyRage = hpRatio < 0.35;
+            const meleeDmg = def.abilities[0]?.damage ?? 25;
+            const meleeCd = def.abilities[0]?.cooldown ?? 1.4;
+            const rangedDmg = def.abilities[1]?.damage ?? 25;
+            const rangedCd = def.abilities[1]?.cooldown ?? 1.8;
+            const projSpd = def.custom?.ranged?.projSpeed ?? PROJECTILE_SPEED;
             // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
             if (dummyRage && tryUse(0) && dist < LUNGE_DISTANCE * 1.4 && dist > MELEE_RANGE * 0.3) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION * 0.85;
               f.lungeFromX = f.x;
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE * 1.3, dist + 50);
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
-              f.lungeDamage = 36;
-              f.abilityCd[0] = 1.1; f.globalCd = 0.35;
+              f.lungeDamage = Math.round(meleeDmg * 1.4);
+              if (def.custom) f.lungeKind = "custom";
+              f.abilityCd[0] = Math.max(0.4, meleeCd * 0.8); f.globalCd = 0.35;
               playSound(SOUNDS.punchLunge, 0.65);
               spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
               continue;
@@ -1311,8 +1368,9 @@ function Game() {
               f.lungeFromX = f.x;
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
               f.lungeProgress = 0; f.lungeHit = false;
-              f.lungeDamage = 25;
-              f.abilityCd[0] = 1.4; f.globalCd = 0.4;
+              f.lungeDamage = meleeDmg;
+              if (def.custom) f.lungeKind = "custom";
+              f.abilityCd[0] = meleeCd; f.globalCd = 0.4;
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
             } else if (tryUse(1) && dist > MELEE_RANGE * 1.4 && dist < w * 0.9) {
@@ -1323,10 +1381,10 @@ function Game() {
               projectilesRef.current.push({
                 uid: nextUid(), ownerUid: f.uid, kind: "cotton",
                 x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                vx: dir * PROJECTILE_SPEED, vy: -140,
-                damage: 25, ttl: 3,
+                vx: dir * projSpd, vy: -140,
+                damage: rangedDmg, ttl: 3,
               });
-              f.abilityCd[1] = 1.8; f.globalCd = 0.4;
+              f.abilityCd[1] = rangedCd; f.globalCd = 0.4;
               playSound(SOUNDS.throwSwing, 0.55);
               continue;
             }
@@ -1761,6 +1819,20 @@ function Game() {
     fightersRef.current.push(make(b, w * 0.75, -1));
     playSound(SOUNDS.spawn, 0.5);
   }, []);
+
+  // Auto-launch a duel when navigated from Builder's "TEST IN ARENA" via ?duel=custom_xxx
+  const search = Route.useSearch();
+  useEffect(() => {
+    const target = (search?.duel ?? (typeof window !== "undefined" ? localStorage.getItem("anif.test.duel") : null)) || "";
+    if (!target) return;
+    if (!(target in (FIGHTERS as Record<string, unknown>))) return;
+    const tid = setTimeout(() => {
+      try { localStorage.removeItem("anif.test.duel"); } catch {}
+      startDuel(target as FighterTypeId, "dummy");
+    }, 350);
+    return () => clearTimeout(tid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search?.duel, customFighters]);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">

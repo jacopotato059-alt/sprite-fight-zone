@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import sndClick from "@/assets/sounds/ui-click.mp3.asset.json";
@@ -37,11 +37,12 @@ type AnimType = "melee" | "dash" | "projectile" | "aoe" | "buff" | "heal";
 type EffectPreset =
   | "slash" | "ring" | "spark" | "flame" | "lightning"
   | "shock" | "smoke" | "burst" | "trail" | "shockwave"
-  | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice";
+  | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice"
+  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers";
 
 type Keyframe = {
   t: number;
-  kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound";
+  kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop";
   payload?: string;
   intensity?: number;
 };
@@ -52,6 +53,12 @@ type Skill = {
   projSpeed: number; duration: number;
   effect: EffectPreset; color: string; sound: string;
   passive: string; timeline: Keyframe[];
+  // ---- v2 mechanics ----
+  fxSpeed?: number;     // 0.3..3 — animation playback speed multiplier
+  hits?: number;        // multi-hit count
+  knockback?: number;   // 0..2000 horizontal launch
+  lifesteal?: number;   // 0..1 portion of damage healed
+  stun?: number;        // seconds of stun on hit
 };
 
 type Fighter = {
@@ -72,6 +79,7 @@ const EFFECT_PRESETS: EffectPreset[] = [
   "slash", "ring", "spark", "flame", "lightning",
   "shock", "smoke", "burst", "trail", "shockwave",
   "blackflash", "crimson", "petals", "vortex", "stars", "ice",
+  "nova", "blackhole", "chains", "geyser", "runes", "feathers",
 ];
 
 const BUILTIN_SOUNDS: Record<string, string> = {
@@ -110,6 +118,7 @@ function newSkill(name = "New Skill"): Skill {
     id: uid(), name, anim: "melee",
     damage: 20, cooldown: 3, range: 80, projSpeed: 600, duration: 0.6,
     effect: "slash", color: "#ff4d4d", sound: "punch-hit", passive: "none",
+    fxSpeed: 1, hits: 1, knockback: 200, lifesteal: 0, stun: 0,
     timeline: [
       { t: 0.1, kind: "startup" },
       { t: 0.35, kind: "spawn-fx", payload: "slash", intensity: 0.8 },
@@ -151,17 +160,43 @@ function loadInstalled(): Fighter[] {
 
 // ---------------- Component ----------------
 function Builder() {
-  const [mod, setMod] = useState<Mod>(() =>
+  const navigate = useNavigate();
+  const [mod, _setMod] = useState<Mod>(() =>
     typeof window === "undefined"
       ? { version: 1, savedAt: Date.now(), fighters: [newFighter()], customSounds: {} }
       : loadMod()
   );
+  // ---- Undo / Redo history ----
+  const historyRef = useRef<Mod[]>([]);
+  const redoRef = useRef<Mod[]>([]);
+  const setMod = useCallback((updater: Mod | ((m: Mod) => Mod)) => {
+    _setMod((prev) => {
+      const next = typeof updater === "function" ? (updater as (m: Mod) => Mod)(prev) : updater;
+      if (next !== prev) {
+        historyRef.current.push(prev);
+        if (historyRef.current.length > 40) historyRef.current.shift();
+        redoRef.current = [];
+      }
+      return next;
+    });
+  }, []);
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    _setMod((cur) => { redoRef.current.push(cur); return prev; });
+  }, []);
+  const redo = useCallback(() => {
+    const nxt = redoRef.current.pop();
+    if (!nxt) return;
+    _setMod((cur) => { historyRef.current.push(cur); return nxt; });
+  }, []);
   const [installed, setInstalled] = useState<Fighter[]>(() =>
     typeof window === "undefined" ? [] : loadInstalled()
   );
   const [activeFighterId, setActiveFighterId] = useState<string>("");
   const [activeSkillId, setActiveSkillId] = useState<string>("");
   const [toast, setToast] = useState<string>("");
+  const [autosaveTick, setAutosaveTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const spriteRef = useRef<HTMLInputElement>(null);
   const soundFileRef = useRef<HTMLInputElement>(null);
@@ -210,6 +245,34 @@ function Builder() {
     flash("Saved to browser storage");
   }, [mod]);
 
+  // ---- Autosave (debounced) ----
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...mod, savedAt: Date.now() }));
+        setAutosaveTick((n) => n + 1);
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [mod]);
+
+  // ---- Keyboard shortcuts: Ctrl/Cmd+Z undo, +Shift redo ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.ctrlKey || e.metaKey;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if (meta && e.key.toLowerCase() === "y") {
+        e.preventDefault(); redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const exportJson = useCallback(() => {
     const blob = new Blob([JSON.stringify(mod, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -229,7 +292,7 @@ function Builder() {
       } catch { flash("Invalid mod file"); }
     };
     r.readAsText(file);
-  }, []);
+  }, [setMod]);
 
   const installToRoster = useCallback(() => {
     if (!activeFighter) return;
@@ -239,6 +302,19 @@ function Builder() {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
     flash(`${activeFighter.name} installed in Fighters menu`);
   }, [activeFighter, installed]);
+
+  // ---- Instant Test in Arena: install + jump to duel ----
+  const testInArena = useCallback(() => {
+    if (!activeFighter) return;
+    if (!activeFighter.spriteDataUrl) { flash("Upload a sprite first"); return; }
+    const next = [...installed.filter((f) => f.id !== activeFighter.id), activeFighter];
+    setInstalled(next);
+    localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
+    try { localStorage.setItem("anif.test.duel", `custom_${activeFighter.id}`); } catch {}
+    flash("Launching duel test…");
+    setTimeout(() => navigate({ to: "/", search: { duel: `custom_${activeFighter.id}` } as never }), 250);
+  }, [activeFighter, installed, navigate]);
+
 
   const uninstall = useCallback((id: string) => {
     const next = installed.filter((f) => f.id !== id);
@@ -344,7 +420,11 @@ function Builder() {
             <div className="text-base sm:text-xl font-bold tracking-wider truncate">Fighter & Skill Builder</div>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-end items-center">
+          <span className="text-[10px] opacity-50 hidden sm:inline">autosave ✓ {autosaveTick}</span>
+          <button title="Undo (Ctrl+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={undo}>↶</button>
+          <button title="Redo (Ctrl+Shift+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={redo}>↷</button>
+          <button className="px-3 py-2 text-xs rounded" style={btnStyle("#6a1f3a")} onClick={testInArena}>⚡ TEST IN ARENA</button>
           <button className="px-3 py-2 text-xs rounded" style={btnStyle("#3b2469")} onClick={installToRoster}>
             {isInstalled ? "↻ UPDATE ROSTER" : "+ INSTALL TO ROSTER"}
           </button>
@@ -480,6 +560,16 @@ function Builder() {
                       onChange={(v) => updateSkill((s) => ({ ...s, projSpeed: v }))} />
                     <Stat label="Duration (s)" value={activeSkill.duration} min={0.1} max={5} step={0.1}
                       onChange={(v) => updateSkill((s) => ({ ...s, duration: v }))} />
+                    <Stat label="FX Speed" value={activeSkill.fxSpeed ?? 1} min={0.3} max={3} step={0.1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, fxSpeed: v }))} />
+                    <Stat label="Multi-Hits" value={activeSkill.hits ?? 1} min={1} max={8} step={1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, hits: v }))} />
+                    <Stat label="Knockback" value={activeSkill.knockback ?? 200} min={0} max={2000} step={20}
+                      onChange={(v) => updateSkill((s) => ({ ...s, knockback: v }))} />
+                    <Stat label="Lifesteal %" value={Math.round((activeSkill.lifesteal ?? 0) * 100)} min={0} max={100} step={1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, lifesteal: v / 100 }))} />
+                    <Stat label="Stun (s)" value={activeSkill.stun ?? 0} min={0} max={3} step={0.05}
+                      onChange={(v) => updateSkill((s) => ({ ...s, stun: v }))} />
                     <div>
                       <Label>Passive (fighter)</Label>
                       <select value={activeSkill.passive}
@@ -503,7 +593,7 @@ function Builder() {
                             border: `1px solid ${activeSkill.effect === e ? activeSkill.color : "#2a2a3a"}`,
                             boxShadow: activeSkill.effect === e ? `0 0 12px ${activeSkill.color}66` : "none",
                           }}>
-                          <FxBlob preset={e} color={activeSkill.color} intensity={1} playing />
+                          <FxBlob preset={e} color={activeSkill.color} intensity={1} playing fxSpeed={activeSkill.fxSpeed ?? 1} />
                           <div className="absolute bottom-0 inset-x-0 text-[9px] uppercase tracking-wider text-center py-0.5"
                             style={{ background: "rgba(0,0,0,0.6)" }}>{e}</div>
                         </button>
@@ -577,6 +667,14 @@ function Builder() {
         </aside>
       </div>
 
+      {/* Floating scroll buttons */}
+      <div className="fixed right-3 bottom-16 z-40 flex flex-col gap-2">
+        <button title="Scroll to top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↑</button>
+        <button title="Scroll to bottom" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })}
+          className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↓</button>
+      </div>
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded text-sm z-50"
           style={{ background: "#1b1b28", border: "1px solid #3a3a52" }}>{toast}</div>
@@ -612,6 +710,7 @@ const KIND_COLORS: Record<Keyframe["kind"], string> = {
   startup: "#6b7280", active: "#fbbf24", recovery: "#475569",
   "spawn-fx": "#a855f7", "spawn-projectile": "#06b6d4",
   damage: "#ef4444", sound: "#10b981",
+  screenshake: "#f97316", hitstop: "#e11d48",
 };
 
 function TimelineEditor({
@@ -626,6 +725,8 @@ function TimelineEditor({
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [popoverIdx, setPopoverIdx] = useState<number | null>(null);
+  const dragStartRef = useRef<{ x: number; t: number; moved: boolean } | null>(null);
 
   const addKeyframe = (kind: Keyframe["kind"]) => {
     const kf: Keyframe = {
@@ -635,20 +736,43 @@ function TimelineEditor({
     };
     onChange([...skill.timeline, kf].sort((a, b) => a.t - b.t));
   };
-  const removeKeyframe = (idx: number) => onChange(skill.timeline.filter((_, i) => i !== idx));
+  const addLayer = () => {
+    // Add 3 staggered spawn-fx layers around mid-skill to make compound effects easy
+    const layers: Keyframe[] = [
+      { t: 0.32, kind: "spawn-fx", payload: skill.effect, intensity: 1 },
+      { t: 0.4, kind: "spawn-fx", payload: "ring", intensity: 0.8 },
+      { t: 0.48, kind: "spawn-fx", payload: "spark", intensity: 0.9 },
+    ];
+    onChange([...skill.timeline, ...layers].sort((a, b) => a.t - b.t));
+  };
+  const removeKeyframe = (idx: number) => {
+    onChange(skill.timeline.filter((_, i) => i !== idx));
+    setPopoverIdx(null);
+  };
   const updateKf = (idx: number, patch: Partial<Keyframe>) =>
     onChange(skill.timeline.map((k, i) => (i === idx ? { ...k, ...patch } : k)));
 
-  // Robust drag using window listeners so the pointer never escapes the handle
+  // Drag with movement threshold; if pointer barely moved, treat as click → open popover
   useEffect(() => {
     if (dragIdx === null) return;
     const onMove = (e: PointerEvent) => {
       const rect = trackRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      updateKf(dragIdx, { t });
+      const start = dragStartRef.current;
+      if (start && Math.abs(e.clientX - start.x) > 4) start.moved = true;
+      if (start?.moved) {
+        const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        updateKf(dragIdx, { t });
+      }
     };
-    const onUp = () => setDragIdx(null);
+    const onUp = () => {
+      const start = dragStartRef.current;
+      if (start && !start.moved) {
+        setPopoverIdx(dragIdx);
+      }
+      setDragIdx(null);
+      dragStartRef.current = null;
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -666,17 +790,23 @@ function TimelineEditor({
     if (!rect) return;
     const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     onScrub(t);
+    setPopoverIdx(null);
   };
+
+  const popKf = popoverIdx !== null ? skill.timeline[popoverIdx] : null;
 
   return (
     <div className="mt-2 mb-4">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <Label>Skill Timeline ({skill.duration.toFixed(1)}s)</Label>
+        <Label>Skill Timeline ({skill.duration.toFixed(1)}s) — click a marker to edit</Label>
         <div className="flex gap-1 flex-wrap">
           <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#16213e")} onClick={onPlayToggle}>
             {playing ? "❚❚ PAUSE" : "▶ PLAY"}
           </button>
-          {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound"] as Keyframe["kind"][]).map((k) => (
+          <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3b2469")} onClick={addLayer} title="Add a compound 3-layer FX burst">
+            + LAYER
+          </button>
+          {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound", "screenshake", "hitstop"] as Keyframe["kind"][]).map((k) => (
             <button key={k} className="text-[10px] px-2 py-1 rounded"
               style={{ background: KIND_COLORS[k], color: "#000", border: "none" }}
               onClick={() => addKeyframe(k)}>+ {k}</button>
@@ -697,48 +827,101 @@ function TimelineEditor({
           style={{ left: `${previewT * 100}%`, boxShadow: "0 0 4px #fff" }} />
         {skill.timeline.map((k, i) => (
           <div key={i}
-            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDragIdx(i); }}
+            onPointerDown={(e) => {
+              e.stopPropagation(); e.preventDefault();
+              dragStartRef.current = { x: e.clientX, t: k.t, moved: false };
+              setDragIdx(i);
+            }}
             onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
-            title={`${k.kind} @ ${(k.t * skill.duration).toFixed(2)}s — drag to retime, double-click to remove`}
+            title={`${k.kind} @ ${(k.t * skill.duration).toFixed(2)}s — click to edit, drag to retime, double-click to remove`}
             className="absolute top-1 w-4 h-14 rounded-sm cursor-grab touch-none"
             style={{
               left: `calc(${k.t * 100}% - 8px)`,
               background: KIND_COLORS[k.kind],
-              boxShadow: dragIdx === i ? `0 0 10px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
-              border: dragIdx === i ? "1px solid #fff" : "none",
+              boxShadow: dragIdx === i || popoverIdx === i ? `0 0 10px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
+              border: popoverIdx === i ? "1px solid #fff" : dragIdx === i ? "1px solid #fff" : "none",
             }} />
         ))}
+
+        {/* Popover */}
+        {popKf && popoverIdx !== null && (
+          <div className="absolute z-20 p-3 rounded shadow-lg"
+            style={{
+              top: "calc(100% + 8px)",
+              left: `clamp(0px, calc(${popKf.t * 100}% - 130px), calc(100% - 260px))`,
+              width: 260, background: "#0d0d14", border: "1px solid #3a3a52",
+              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
+            }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[popKf.kind], color: "#000" }}>
+                {popKf.kind}
+              </span>
+              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setPopoverIdx(null)}>✕</button>
+            </div>
+            <Label>Kind</Label>
+            <select value={popKf.kind}
+              onChange={(e) => updateKf(popoverIdx, { kind: e.target.value as Keyframe["kind"] })}
+              className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
+              {(Object.keys(KIND_COLORS) as Keyframe["kind"][]).map((k) => <option key={k} value={k}>{k}</option>)}
+            </select>
+            <Label>Time ({(popKf.t * skill.duration).toFixed(2)}s)</Label>
+            <input type="range" min={0} max={1} step={0.01} value={popKf.t}
+              onChange={(e) => updateKf(popoverIdx, { t: Number(e.target.value) })}
+              className="w-full accent-purple-400 mb-2" />
+            <Label>Intensity ({(popKf.intensity ?? 1).toFixed(2)})</Label>
+            <input type="range" min={0.1} max={2} step={0.05} value={popKf.intensity ?? 1}
+              onChange={(e) => updateKf(popoverIdx, { intensity: Number(e.target.value) })}
+              className="w-full accent-purple-400 mb-2" />
+            {(popKf.kind === "spawn-fx" || popKf.kind === "spawn-projectile") && (
+              <>
+                <Label>Effect Preset</Label>
+                <select value={popKf.payload ?? ""}
+                  onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                  className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
+                  {EFFECT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <div className="relative h-16 rounded overflow-hidden" style={{ background: "#08080c", border: "1px solid #22222c" }}>
+                  <FxBlob preset={(popKf.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={popKf.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+                </div>
+              </>
+            )}
+            {popKf.kind === "sound" && (
+              <>
+                <Label>Sound</Label>
+                <div className="flex items-center gap-1">
+                  <select value={popKf.payload ?? ""}
+                    onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                    className="flex-1 min-w-0 bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs">
+                    {soundNames.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <button onClick={() => onPlaySound(popKf.payload ?? "")}
+                    className="text-[10px] px-1.5 py-1 rounded" style={btnStyle("#1c3a2a")}>▶</button>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between mt-3">
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3a1f1f")} onClick={() => removeKeyframe(popoverIdx)}>DELETE</button>
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={() => setPopoverIdx(null)}>DONE</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
         {skill.timeline.map((k, i) => (
-          <div key={i} className="p-2 rounded text-xs" style={{ background: "#11111a", border: "1px solid #22222c" }}>
+          <div key={i} className="p-2 rounded text-xs cursor-pointer" style={{ background: popoverIdx === i ? "#1d1530" : "#11111a", border: `1px solid ${popoverIdx === i ? "#5b3fa3" : "#22222c"}` }}
+            onClick={() => setPopoverIdx(i)}>
             <div className="flex items-center justify-between mb-1">
               <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[k.kind], color: "#000" }}>
                 {k.kind}
               </span>
-              <button className="text-[10px] opacity-60 hover:opacity-100" onClick={() => removeKeyframe(i)}>✕</button>
+              <button className="text-[10px] opacity-60 hover:opacity-100" onClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}>✕</button>
             </div>
-            <div className="text-[10px] mb-1">t = {(k.t * skill.duration).toFixed(2)}s</div>
+            <div className="text-[10px] mb-1">t = {(k.t * skill.duration).toFixed(2)}s · ✎ click to edit</div>
             <input type="range" min={0} max={1} step={0.01} value={k.t}
+              onClick={(e) => e.stopPropagation()}
               onChange={(e) => updateKf(i, { t: Number(e.target.value) })}
               className="w-full accent-purple-400" />
-            {(k.kind === "spawn-fx" || k.kind === "spawn-projectile") && (
-              <select value={k.payload ?? ""} onChange={(e) => updateKf(i, { payload: e.target.value })}
-                className="w-full mt-1 bg-[#0d0d14] border border-[#2a2a3a] rounded px-1 py-0.5 text-[10px]">
-                {EFFECT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            )}
-            {k.kind === "sound" && (
-              <div className="flex items-center gap-1 mt-1">
-                <select value={k.payload ?? ""} onChange={(e) => updateKf(i, { payload: e.target.value })}
-                  className="flex-1 min-w-0 bg-[#0d0d14] border border-[#2a2a3a] rounded px-1 py-0.5 text-[10px]">
-                  {soundNames.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <button onClick={() => onPlaySound(k.payload ?? "")}
-                  className="text-[10px] px-1.5 py-0.5 rounded" style={btnStyle("#1c3a2a")}>▶</button>
-              </div>
-            )}
           </div>
         ))}
       </div>
@@ -755,9 +938,9 @@ function PreviewPane({ skill, t }: { skill: Skill; t: number }) {
         <div className="w-14 h-14 rounded-full" style={{ background: "#2a2a3a", border: "2px solid #44445a", boxShadow: "inset 0 0 12px rgba(0,0,0,0.6)" }} />
       </div>
       {(active.length === 0
-        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing />]
+        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing fxSpeed={skill.fxSpeed ?? 1} />]
         : active.map((k, i) => (
-            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing />
+            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
           ))
       )}
       <div className="absolute bottom-1 left-2 text-[10px] opacity-60">
@@ -790,12 +973,13 @@ function FxKeyframes() {
   );
 }
 
-function FxBlob({ preset, color, intensity, playing }: { preset: EffectPreset; color: string; intensity: number; playing?: boolean }) {
+function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: EffectPreset; color: string; intensity: number; playing?: boolean; fxSpeed?: number }) {
   const size = 40 + 60 * intensity;
   const anim = playing ? "" : " paused";
   const common: React.CSSProperties = {
     position: "absolute", left: "50%", top: "50%",
     transform: "translate(-50%,-50%)", pointerEvents: "none",
+    animationDuration: fxSpeed !== 1 ? `calc(1s / ${fxSpeed})` : undefined,
   };
 
   if (preset === "ring") {
@@ -1024,6 +1208,123 @@ function FxBlob({ preset, color, intensity, playing }: { preset: EffectPreset; c
               ["--a" as never]: `${a}deg`,
               animation: `fx-ice-grow 1.4s ${(i * 0.1)}s infinite ease-out${anim}`,
               transformOrigin: "center",
+            } as React.CSSProperties} />
+          );
+        })}
+      </>
+    );
+  }
+
+  if (preset === "nova") {
+    return (
+      <>
+        <div style={{ ...common, width: size * 2.4, height: size * 2.4, borderRadius: "50%",
+          background: `radial-gradient(circle, ${color} 0%, transparent 60%)`, filter: "blur(4px)",
+          animation: `fx-ring-pulse 0.9s infinite ease-out${anim}` }} />
+        {Array.from({ length: 16 }).map((_, i) => {
+          const a = (i / 16) * 360;
+          return <div key={i} style={{
+            ...common, width: 2, height: size * 1.1, background: color,
+            boxShadow: `0 0 10px ${color}`, ["--a" as never]: `${a}deg`,
+            animation: `fx-burst-out 0.7s ${(i % 3) * 0.05}s infinite ease-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+        <div style={{ ...common, width: size * 0.8, height: size * 0.8, borderRadius: "50%",
+          background: "#fff", filter: "blur(6px)", animation: `fx-flicker 0.18s infinite${anim}` }} />
+      </>
+    );
+  }
+
+  if (preset === "blackhole") {
+    return (
+      <>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (2 - i * 0.3), height: size * (2 - i * 0.3),
+            borderRadius: "50%", border: `1px solid ${color}`, opacity: 0.5 - i * 0.08,
+            animation: `${i % 2 ? "fx-rotate" : "fx-rotate-slow"} ${1 + i * 0.5}s linear infinite${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 0.9, height: size * 0.9, borderRadius: "50%",
+          background: "#000", boxShadow: `0 0 24px ${color}, inset 0 0 18px ${color}` }} />
+        <div style={{ ...common, width: size * 0.3, height: size * 0.3, borderRadius: "50%",
+          background: color, filter: "blur(3px)", animation: `fx-flicker 0.25s infinite${anim}` }} />
+      </>
+    );
+  }
+
+  if (preset === "chains") {
+    return (
+      <>
+        {Array.from({ length: 6 }).map((_, i) => {
+          const a = (i / 6) * 360;
+          return (
+            <div key={i} style={{
+              ...common, width: size * 1.4, height: 6,
+              background: `repeating-linear-gradient(90deg, ${color} 0 6px, transparent 6px 12px)`,
+              boxShadow: `0 0 6px ${color}`,
+              ["--a" as never]: `${a}deg`,
+              animation: `fx-burst-out 1s ${i * 0.06}s infinite ease-out${anim}`,
+            } as React.CSSProperties} />
+          );
+        })}
+      </>
+    );
+  }
+
+  if (preset === "geyser") {
+    return (
+      <>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: 4 + (i % 3) * 2, height: size * (1.2 + (i % 4) * 0.2),
+            top: "70%", left: `${50 + (i - 5) * 6}%`,
+            background: `linear-gradient(180deg, transparent, ${color})`,
+            filter: "blur(1px)", boxShadow: `0 0 10px ${color}`,
+            animation: `fx-smoke-rise 0.9s ${(i * 0.07)}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 1.8, height: 8, top: "78%", borderRadius: 6,
+          background: `radial-gradient(ellipse, ${color}, transparent)`, filter: "blur(2px)" }} />
+      </>
+    );
+  }
+
+  if (preset === "runes") {
+    return (
+      <>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (1.4 - i * 0.3), height: size * (1.4 - i * 0.3),
+            border: `1.5px solid ${color}`, borderRadius: i === 1 ? 4 : "50%",
+            boxShadow: `0 0 10px ${color}`, opacity: 0.8,
+            animation: `${i % 2 ? "fx-rotate" : "fx-rotate-slow"} ${2.5 + i * 0.4}s linear infinite${anim}`,
+          }} />
+        ))}
+        {Array.from({ length: 6 }).map((_, i) => {
+          const a = (i / 6) * 360;
+          return <div key={`r${i}`} style={{
+            ...common, width: 8, height: 8, background: color, borderRadius: 1,
+            ["--a" as never]: `${a}deg`, ["--r" as never]: `${size * 0.55}px`,
+            animation: `fx-star-twinkle 1.6s ${i * 0.1}s infinite ease-in-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+      </>
+    );
+  }
+
+  if (preset === "feathers") {
+    return (
+      <>
+        {Array.from({ length: 8 }).map((_, i) => {
+          const a = (i / 8) * 360;
+          return (
+            <div key={i} style={{
+              ...common, width: 4, height: 18,
+              background: `linear-gradient(180deg, ${color}, transparent)`,
+              borderRadius: "50% 50% 20% 20%", boxShadow: `0 0 6px ${color}`,
+              ["--a" as never]: `${a}deg`,
+              animation: `fx-petal-fall 2s ${i * 0.18}s infinite ease-in-out${anim}`,
             } as React.CSSProperties} />
           );
         })}
