@@ -42,6 +42,7 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "NPC vs NPC pixel fighting sandbox." },
     ],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({ duel: typeof s.duel === "string" ? s.duel : undefined }),
   component: Game,
 });
 
