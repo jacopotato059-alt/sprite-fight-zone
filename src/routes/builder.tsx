@@ -420,7 +420,11 @@ function Builder() {
             <div className="text-base sm:text-xl font-bold tracking-wider truncate">Fighter & Skill Builder</div>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap justify-end items-center">
+          <span className="text-[10px] opacity-50 hidden sm:inline">autosave ✓ {autosaveTick}</span>
+          <button title="Undo (Ctrl+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={undo}>↶</button>
+          <button title="Redo (Ctrl+Shift+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={redo}>↷</button>
+          <button className="px-3 py-2 text-xs rounded" style={btnStyle("#6a1f3a")} onClick={testInArena}>⚡ TEST IN ARENA</button>
           <button className="px-3 py-2 text-xs rounded" style={btnStyle("#3b2469")} onClick={installToRoster}>
             {isInstalled ? "↻ UPDATE ROSTER" : "+ INSTALL TO ROSTER"}
           </button>
