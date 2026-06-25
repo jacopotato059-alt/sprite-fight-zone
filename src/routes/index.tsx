@@ -1316,14 +1316,20 @@ function Game() {
             }
             // Dummy abilities — with "Rage" sub-variant when low HP
             const dummyRage = hpRatio < 0.35;
+            const meleeDmg = def.abilities[0]?.damage ?? 25;
+            const meleeCd = def.abilities[0]?.cooldown ?? 1.4;
+            const rangedDmg = def.abilities[1]?.damage ?? 25;
+            const rangedCd = def.abilities[1]?.cooldown ?? 1.8;
+            const projSpd = def.custom?.ranged?.projSpeed ?? PROJECTILE_SPEED;
             // Sub-variant: low-HP Rage Lunge — ignores intent gate, longer reach, +dmg
             if (dummyRage && tryUse(0) && dist < LUNGE_DISTANCE * 1.4 && dist > MELEE_RANGE * 0.3) {
               f.state = "lunge"; f.stateTimer = LUNGE_DURATION * 0.85;
               f.lungeFromX = f.x;
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE * 1.3, dist + 50);
               f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true;
-              f.lungeDamage = 36;
-              f.abilityCd[0] = 1.1; f.globalCd = 0.35;
+              f.lungeDamage = Math.round(meleeDmg * 1.4);
+              if (def.custom) f.lungeKind = "custom";
+              f.abilityCd[0] = Math.max(0.4, meleeCd * 0.8); f.globalCd = 0.35;
               playSound(SOUNDS.punchLunge, 0.65);
               spawnEffect("counterburst", f.x, f.y - def.height * 0.55, 0.4);
               continue;
@@ -1333,8 +1339,9 @@ function Game() {
               f.lungeFromX = f.x;
               f.lungeToX = f.x + f.facing * Math.min(LUNGE_DISTANCE, dist + 30);
               f.lungeProgress = 0; f.lungeHit = false;
-              f.lungeDamage = 25;
-              f.abilityCd[0] = 1.4; f.globalCd = 0.4;
+              f.lungeDamage = meleeDmg;
+              if (def.custom) f.lungeKind = "custom";
+              f.abilityCd[0] = meleeCd; f.globalCd = 0.4;
               playSound(SOUNDS.punchLunge, 0.55);
               continue;
             } else if (tryUse(1) && dist > MELEE_RANGE * 1.4 && dist < w * 0.9) {
@@ -1345,10 +1352,10 @@ function Game() {
               projectilesRef.current.push({
                 uid: nextUid(), ownerUid: f.uid, kind: "cotton",
                 x: f.x + dir * 28, y: f.y - def.height * 0.55,
-                vx: dir * PROJECTILE_SPEED, vy: -140,
-                damage: 25, ttl: 3,
+                vx: dir * projSpd, vy: -140,
+                damage: rangedDmg, ttl: 3,
               });
-              f.abilityCd[1] = 1.8; f.globalCd = 0.4;
+              f.abilityCd[1] = rangedCd; f.globalCd = 0.4;
               playSound(SOUNDS.throwSwing, 0.55);
               continue;
             }
