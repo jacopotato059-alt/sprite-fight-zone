@@ -930,9 +930,9 @@ function PreviewPane({ skill, t }: { skill: Skill; t: number }) {
         <div className="w-14 h-14 rounded-full" style={{ background: "#2a2a3a", border: "2px solid #44445a", boxShadow: "inset 0 0 12px rgba(0,0,0,0.6)" }} />
       </div>
       {(active.length === 0
-        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing />]
+        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing fxSpeed={skill.fxSpeed ?? 1} />]
         : active.map((k, i) => (
-            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing />
+            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
           ))
       )}
       <div className="absolute bottom-1 left-2 text-[10px] opacity-60">
