@@ -160,17 +160,43 @@ function loadInstalled(): Fighter[] {
 
 // ---------------- Component ----------------
 function Builder() {
-  const [mod, setMod] = useState<Mod>(() =>
+  const navigate = useNavigate();
+  const [mod, _setMod] = useState<Mod>(() =>
     typeof window === "undefined"
       ? { version: 1, savedAt: Date.now(), fighters: [newFighter()], customSounds: {} }
       : loadMod()
   );
+  // ---- Undo / Redo history ----
+  const historyRef = useRef<Mod[]>([]);
+  const redoRef = useRef<Mod[]>([]);
+  const setMod = useCallback((updater: Mod | ((m: Mod) => Mod)) => {
+    _setMod((prev) => {
+      const next = typeof updater === "function" ? (updater as (m: Mod) => Mod)(prev) : updater;
+      if (next !== prev) {
+        historyRef.current.push(prev);
+        if (historyRef.current.length > 40) historyRef.current.shift();
+        redoRef.current = [];
+      }
+      return next;
+    });
+  }, []);
+  const undo = useCallback(() => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    _setMod((cur) => { redoRef.current.push(cur); return prev; });
+  }, []);
+  const redo = useCallback(() => {
+    const nxt = redoRef.current.pop();
+    if (!nxt) return;
+    _setMod((cur) => { historyRef.current.push(cur); return nxt; });
+  }, []);
   const [installed, setInstalled] = useState<Fighter[]>(() =>
     typeof window === "undefined" ? [] : loadInstalled()
   );
   const [activeFighterId, setActiveFighterId] = useState<string>("");
   const [activeSkillId, setActiveSkillId] = useState<string>("");
   const [toast, setToast] = useState<string>("");
+  const [autosaveTick, setAutosaveTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const spriteRef = useRef<HTMLInputElement>(null);
   const soundFileRef = useRef<HTMLInputElement>(null);
