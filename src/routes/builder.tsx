@@ -881,12 +881,13 @@ function FxKeyframes() {
   );
 }
 
-function FxBlob({ preset, color, intensity, playing }: { preset: EffectPreset; color: string; intensity: number; playing?: boolean }) {
+function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: EffectPreset; color: string; intensity: number; playing?: boolean; fxSpeed?: number }) {
   const size = 40 + 60 * intensity;
   const anim = playing ? "" : " paused";
   const common: React.CSSProperties = {
     position: "absolute", left: "50%", top: "50%",
     transform: "translate(-50%,-50%)", pointerEvents: "none",
+    animationDuration: fxSpeed !== 1 ? `calc(1s / ${fxSpeed})` : undefined,
   };
 
   if (preset === "ring") {
