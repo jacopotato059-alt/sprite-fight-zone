@@ -37,11 +37,12 @@ type AnimType = "melee" | "dash" | "projectile" | "aoe" | "buff" | "heal";
 type EffectPreset =
   | "slash" | "ring" | "spark" | "flame" | "lightning"
   | "shock" | "smoke" | "burst" | "trail" | "shockwave"
-  | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice";
+  | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice"
+  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers";
 
 type Keyframe = {
   t: number;
-  kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound";
+  kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop";
   payload?: string;
   intensity?: number;
 };
@@ -52,6 +53,12 @@ type Skill = {
   projSpeed: number; duration: number;
   effect: EffectPreset; color: string; sound: string;
   passive: string; timeline: Keyframe[];
+  // ---- v2 mechanics ----
+  fxSpeed?: number;     // 0.3..3 — animation playback speed multiplier
+  hits?: number;        // multi-hit count
+  knockback?: number;   // 0..2000 horizontal launch
+  lifesteal?: number;   // 0..1 portion of damage healed
+  stun?: number;        // seconds of stun on hit
 };
 
 type Fighter = {
@@ -72,6 +79,7 @@ const EFFECT_PRESETS: EffectPreset[] = [
   "slash", "ring", "spark", "flame", "lightning",
   "shock", "smoke", "burst", "trail", "shockwave",
   "blackflash", "crimson", "petals", "vortex", "stars", "ice",
+  "nova", "blackhole", "chains", "geyser", "runes", "feathers",
 ];
 
 const BUILTIN_SOUNDS: Record<string, string> = {
