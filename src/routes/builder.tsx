@@ -620,6 +620,7 @@ const KIND_COLORS: Record<Keyframe["kind"], string> = {
   startup: "#6b7280", active: "#fbbf24", recovery: "#475569",
   "spawn-fx": "#a855f7", "spawn-projectile": "#06b6d4",
   damage: "#ef4444", sound: "#10b981",
+  screenshake: "#f97316", hitstop: "#e11d48",
 };
 
 function TimelineEditor({
