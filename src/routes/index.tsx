@@ -818,6 +818,34 @@ function Game() {
                   t2.vx = f.facing * 1500; t2.vy = -700;
                   t2.stunned = Math.max(t2.stunned, 0.7);
                 }
+              } else if (f.lungeKind === "custom") {
+                const meta = def.custom?.melee;
+                const fxKind = (meta?.effect && EFFECT_MAP[meta.effect]) ?? "counterburst";
+                spawnEffect(fxKind, hitX, hitY, 0.55);
+                if (meta?.effect && (meta.effect === "nova" || meta.effect === "blackhole" || meta.effect === "shockwave")) {
+                  spawnEffect("shockwave", hitX, hitY + 20, 0.7);
+                }
+                // Custom sound — fall back to default punch
+                const url = meta?.sound ? `__custom_${meta.sound}` : undefined;
+                if (url && (FIGHTERS as Record<string, FighterDef>)[f.type]) {
+                  try { const a = new Audio(); a.volume = 0.7; /* sound lookup omitted */ } catch {}
+                }
+                playSound(SOUNDS.punchHit, 0.7);
+                // Multi-hit, knockback, lifesteal, stun
+                const hits = Math.max(1, meta?.hits ?? 1);
+                for (let h = 1; h < hits; h++) {
+                  applyDamage(t2, Math.round((f.lungeDamage ?? meta?.damage ?? 20) * 0.5), f.facing, f.uid);
+                  spawnEffect(fxKind, hitX + (h - 1) * 6, hitY - h * 4, 0.35);
+                }
+                const kb = meta?.knockback ?? 0;
+                if (kb > 0) { t2.vx = f.facing * kb; t2.vy = -Math.min(600, kb * 0.4); t2.onGround = false; }
+                const stun = meta?.stun ?? 0;
+                if (stun > 0) t2.stunned = Math.max(t2.stunned, stun);
+                const ls = meta?.lifesteal ?? 0;
+                if (ls > 0) {
+                  f.hp = Math.min(f.maxHp, f.hp + Math.round((f.lungeDamage ?? 0) * ls));
+                  f.hitFlash = Math.max(f.hitFlash, 0.1);
+                }
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
