@@ -118,6 +118,7 @@ function newSkill(name = "New Skill"): Skill {
     id: uid(), name, anim: "melee",
     damage: 20, cooldown: 3, range: 80, projSpeed: 600, duration: 0.6,
     effect: "slash", color: "#ff4d4d", sound: "punch-hit", passive: "none",
+    fxSpeed: 1, hits: 1, knockback: 200, lifesteal: 0, stun: 0,
     timeline: [
       { t: 0.1, kind: "startup" },
       { t: 0.35, kind: "spawn-fx", payload: "slash", intensity: 0.8 },
