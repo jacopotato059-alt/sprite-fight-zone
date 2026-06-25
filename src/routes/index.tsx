@@ -126,10 +126,12 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
+interface CustomSkillMeta { name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
   atk: number; def: number; speed: number;
   abilities: AbilityDef[]; width: number; height: number;
+  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta };
 }
 
 const FIGHTERS: Record<FighterTypeId, FighterDef> = {
