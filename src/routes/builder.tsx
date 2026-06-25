@@ -593,7 +593,7 @@ function Builder() {
                             border: `1px solid ${activeSkill.effect === e ? activeSkill.color : "#2a2a3a"}`,
                             boxShadow: activeSkill.effect === e ? `0 0 12px ${activeSkill.color}66` : "none",
                           }}>
-                          <FxBlob preset={e} color={activeSkill.color} intensity={1} playing />
+                          <FxBlob preset={e} color={activeSkill.color} intensity={1} playing fxSpeed={activeSkill.fxSpeed ?? 1} />
                           <div className="absolute bottom-0 inset-x-0 text-[9px] uppercase tracking-wider text-center py-0.5"
                             style={{ background: "rgba(0,0,0,0.6)" }}>{e}</div>
                         </button>
