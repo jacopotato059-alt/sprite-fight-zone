@@ -336,7 +336,7 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
     const typeId = `custom_${c.id}` as FighterTypeId;
     const meleeSkill = c.skills.find((s) => s.anim !== "projectile") ?? c.skills[0];
     const rangedSkill = c.skills.find((s) => s.anim === "projectile") ?? c.skills[1] ?? c.skills[0];
-    const def: FighterDef & { custom?: { melee?: CustomSkillInstall; ranged?: CustomSkillInstall; sounds?: Record<string, string> } } = {
+    (FIGHTERS as Record<string, FighterDef>)[typeId] = {
       id: typeId, name: c.name,
       sprite: c.spriteDataUrl ?? dummySprite,
       atk: Math.max(50, meleeSkill?.damage ?? 25),
@@ -349,7 +349,6 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
       width: 64, height: 104,
       custom: { melee: meleeSkill, ranged: rangedSkill },
     };
-    (FIGHTERS as Record<string, FighterDef>)[typeId] = def;
   }
 }
 
