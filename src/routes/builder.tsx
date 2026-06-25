@@ -667,6 +667,14 @@ function Builder() {
         </aside>
       </div>
 
+      {/* Floating scroll buttons */}
+      <div className="fixed right-3 bottom-16 z-40 flex flex-col gap-2">
+        <button title="Scroll to top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↑</button>
+        <button title="Scroll to bottom" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })}
+          className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↓</button>
+      </div>
+
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded text-sm z-50"
           style={{ background: "#1b1b28", border: "1px solid #3a3a52" }}>{toast}</div>
