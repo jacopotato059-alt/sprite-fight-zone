@@ -295,10 +295,29 @@ function hueAt(t: number) {
 
 type AiDifficulty = "easy" | "normal" | "hard" | "insane";
 
+type CustomSkillInstall = {
+  name: string; damage: number; cooldown: number; anim: string;
+  range?: number; projSpeed?: number; duration?: number;
+  effect?: string; color?: string; sound?: string;
+  hits?: number; knockback?: number; lifesteal?: number; stun?: number;
+};
 type CustomFighterInstall = {
   id: string; name: string; spriteDataUrl: string | null;
   hp: number; speed: number; defense: number;
-  skills: { name: string; damage: number; cooldown: number; anim: string }[];
+  skills: CustomSkillInstall[];
+};
+
+// Map builder effect names to engine Effect kinds
+const EFFECT_MAP: Record<string, Effect["kind"]> = {
+  slash: "cut", crimson: "cut",
+  ring: "shockwave", shockwave: "shockwave", vortex: "shockwave",
+  spark: "counterburst", burst: "counterburst", nova: "counterburst",
+  flame: "greenfire", geyser: "greenfire",
+  lightning: "electric", shock: "electric", chains: "electric",
+  blackflash: "blackflash", blackhole: "blackflash",
+  smoke: "wallspark", trail: "wallspark", feathers: "wallspark",
+  petals: "megaring", stars: "megaring", runes: "megaring",
+  ice: "bluefire",
 };
 
 function loadInstalledFighters(): CustomFighterInstall[] {
@@ -315,7 +334,7 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
     const typeId = `custom_${c.id}` as FighterTypeId;
     const meleeSkill = c.skills.find((s) => s.anim !== "projectile") ?? c.skills[0];
     const rangedSkill = c.skills.find((s) => s.anim === "projectile") ?? c.skills[1] ?? c.skills[0];
-    (FIGHTERS as Record<string, FighterDef>)[typeId] = {
+    const def: FighterDef & { custom?: { melee?: CustomSkillInstall; ranged?: CustomSkillInstall; sounds?: Record<string, string> } } = {
       id: typeId, name: c.name,
       sprite: c.spriteDataUrl ?? dummySprite,
       atk: Math.max(50, meleeSkill?.damage ?? 25),
@@ -326,7 +345,9 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
         { name: rangedSkill?.name ?? "Throw", damage: rangedSkill?.damage ?? 25, type: "ranged", cooldown: rangedSkill?.cooldown ?? 1.8 },
       ],
       width: 64, height: 104,
+      custom: { melee: meleeSkill, ranged: rangedSkill },
     };
+    (FIGHTERS as Record<string, FighterDef>)[typeId] = def;
   }
 }
 
