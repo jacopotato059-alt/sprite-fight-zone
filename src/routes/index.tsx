@@ -1820,6 +1820,20 @@ function Game() {
     playSound(SOUNDS.spawn, 0.5);
   }, []);
 
+  // Auto-launch a duel when navigated from Builder's "TEST IN ARENA" via ?duel=custom_xxx
+  const search = Route.useSearch();
+  useEffect(() => {
+    const target = (search?.duel ?? (typeof window !== "undefined" ? localStorage.getItem("anif.test.duel") : null)) || "";
+    if (!target) return;
+    if (!(target in (FIGHTERS as Record<string, unknown>))) return;
+    const tid = setTimeout(() => {
+      try { localStorage.removeItem("anif.test.duel"); } catch {}
+      startDuel(target as FighterTypeId, "dummy");
+    }, 350);
+    return () => clearTimeout(tid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search?.duel, customFighters]);
+
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
       <div className="absolute top-4 right-4 z-30 flex gap-2 flex-wrap justify-end" style={{ maxWidth: "70vw" }}>
