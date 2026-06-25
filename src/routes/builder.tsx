@@ -1123,6 +1123,123 @@ function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: Ef
     );
   }
 
+  if (preset === "nova") {
+    return (
+      <>
+        <div style={{ ...common, width: size * 2.4, height: size * 2.4, borderRadius: "50%",
+          background: `radial-gradient(circle, ${color} 0%, transparent 60%)`, filter: "blur(4px)",
+          animation: `fx-ring-pulse 0.9s infinite ease-out${anim}` }} />
+        {Array.from({ length: 16 }).map((_, i) => {
+          const a = (i / 16) * 360;
+          return <div key={i} style={{
+            ...common, width: 2, height: size * 1.1, background: color,
+            boxShadow: `0 0 10px ${color}`, ["--a" as never]: `${a}deg`,
+            animation: `fx-burst-out 0.7s ${(i % 3) * 0.05}s infinite ease-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+        <div style={{ ...common, width: size * 0.8, height: size * 0.8, borderRadius: "50%",
+          background: "#fff", filter: "blur(6px)", animation: `fx-flicker 0.18s infinite${anim}` }} />
+      </>
+    );
+  }
+
+  if (preset === "blackhole") {
+    return (
+      <>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (2 - i * 0.3), height: size * (2 - i * 0.3),
+            borderRadius: "50%", border: `1px solid ${color}`, opacity: 0.5 - i * 0.08,
+            animation: `${i % 2 ? "fx-rotate" : "fx-rotate-slow"} ${1 + i * 0.5}s linear infinite${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 0.9, height: size * 0.9, borderRadius: "50%",
+          background: "#000", boxShadow: `0 0 24px ${color}, inset 0 0 18px ${color}` }} />
+        <div style={{ ...common, width: size * 0.3, height: size * 0.3, borderRadius: "50%",
+          background: color, filter: "blur(3px)", animation: `fx-flicker 0.25s infinite${anim}` }} />
+      </>
+    );
+  }
+
+  if (preset === "chains") {
+    return (
+      <>
+        {Array.from({ length: 6 }).map((_, i) => {
+          const a = (i / 6) * 360;
+          return (
+            <div key={i} style={{
+              ...common, width: size * 1.4, height: 6,
+              background: `repeating-linear-gradient(90deg, ${color} 0 6px, transparent 6px 12px)`,
+              boxShadow: `0 0 6px ${color}`,
+              ["--a" as never]: `${a}deg`,
+              animation: `fx-burst-out 1s ${i * 0.06}s infinite ease-out${anim}`,
+            } as React.CSSProperties} />
+          );
+        })}
+      </>
+    );
+  }
+
+  if (preset === "geyser") {
+    return (
+      <>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: 4 + (i % 3) * 2, height: size * (1.2 + (i % 4) * 0.2),
+            top: "70%", left: `${50 + (i - 5) * 6}%`,
+            background: `linear-gradient(180deg, transparent, ${color})`,
+            filter: "blur(1px)", boxShadow: `0 0 10px ${color}`,
+            animation: `fx-smoke-rise 0.9s ${(i * 0.07)}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 1.8, height: 8, top: "78%", borderRadius: 6,
+          background: `radial-gradient(ellipse, ${color}, transparent)`, filter: "blur(2px)" }} />
+      </>
+    );
+  }
+
+  if (preset === "runes") {
+    return (
+      <>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (1.4 - i * 0.3), height: size * (1.4 - i * 0.3),
+            border: `1.5px solid ${color}`, borderRadius: i === 1 ? 4 : "50%",
+            boxShadow: `0 0 10px ${color}`, opacity: 0.8,
+            animation: `${i % 2 ? "fx-rotate" : "fx-rotate-slow"} ${2.5 + i * 0.4}s linear infinite${anim}`,
+          }} />
+        ))}
+        {Array.from({ length: 6 }).map((_, i) => {
+          const a = (i / 6) * 360;
+          return <div key={`r${i}`} style={{
+            ...common, width: 8, height: 8, background: color, borderRadius: 1,
+            ["--a" as never]: `${a}deg`, ["--r" as never]: `${size * 0.55}px`,
+            animation: `fx-star-twinkle 1.6s ${i * 0.1}s infinite ease-in-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+      </>
+    );
+  }
+
+  if (preset === "feathers") {
+    return (
+      <>
+        {Array.from({ length: 8 }).map((_, i) => {
+          const a = (i / 8) * 360;
+          return (
+            <div key={i} style={{
+              ...common, width: 4, height: 18,
+              background: `linear-gradient(180deg, ${color}, transparent)`,
+              borderRadius: "50% 50% 20% 20%", boxShadow: `0 0 6px ${color}`,
+              ["--a" as never]: `${a}deg`,
+              animation: `fx-petal-fall 2s ${i * 0.18}s infinite ease-in-out${anim}`,
+            } as React.CSSProperties} />
+          );
+        })}
+      </>
+    );
+  }
+
   return <div style={{ ...common, width: size, height: size, background: color, borderRadius: 6 }} />;
 }
 
