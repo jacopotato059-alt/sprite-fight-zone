@@ -820,7 +820,7 @@ function Game() {
                 }
               } else if (f.lungeKind === "custom") {
                 const meta = def.custom?.melee;
-                const fxKind = (meta?.effect && EFFECT_MAP[meta.effect]) ?? "counterburst";
+                const fxKind: Effect["kind"] = (meta?.effect ? (EFFECT_MAP[meta.effect] ?? "counterburst") : "counterburst");
                 spawnEffect(fxKind, hitX, hitY, 0.55);
                 if (meta?.effect && (meta.effect === "nova" || meta.effect === "blackhole" || meta.effect === "shockwave")) {
                   spawnEffect("shockwave", hitX, hitY + 20, 0.7);
