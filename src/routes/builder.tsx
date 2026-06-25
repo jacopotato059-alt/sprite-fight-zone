@@ -560,6 +560,16 @@ function Builder() {
                       onChange={(v) => updateSkill((s) => ({ ...s, projSpeed: v }))} />
                     <Stat label="Duration (s)" value={activeSkill.duration} min={0.1} max={5} step={0.1}
                       onChange={(v) => updateSkill((s) => ({ ...s, duration: v }))} />
+                    <Stat label="FX Speed" value={activeSkill.fxSpeed ?? 1} min={0.3} max={3} step={0.1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, fxSpeed: v }))} />
+                    <Stat label="Multi-Hits" value={activeSkill.hits ?? 1} min={1} max={8} step={1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, hits: v }))} />
+                    <Stat label="Knockback" value={activeSkill.knockback ?? 200} min={0} max={2000} step={20}
+                      onChange={(v) => updateSkill((s) => ({ ...s, knockback: v }))} />
+                    <Stat label="Lifesteal %" value={Math.round((activeSkill.lifesteal ?? 0) * 100)} min={0} max={100} step={1}
+                      onChange={(v) => updateSkill((s) => ({ ...s, lifesteal: v / 100 }))} />
+                    <Stat label="Stun (s)" value={activeSkill.stun ?? 0} min={0} max={3} step={0.05}
+                      onChange={(v) => updateSkill((s) => ({ ...s, stun: v }))} />
                     <div>
                       <Label>Passive (fighter)</Label>
                       <select value={activeSkill.passive}
