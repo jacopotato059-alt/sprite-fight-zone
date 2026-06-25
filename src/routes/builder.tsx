@@ -245,6 +245,34 @@ function Builder() {
     flash("Saved to browser storage");
   }, [mod]);
 
+  // ---- Autosave (debounced) ----
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...mod, savedAt: Date.now() }));
+        setAutosaveTick((n) => n + 1);
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [mod]);
+
+  // ---- Keyboard shortcuts: Ctrl/Cmd+Z undo, +Shift redo ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.ctrlKey || e.metaKey;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+      if (meta && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if (meta && e.key.toLowerCase() === "y") {
+        e.preventDefault(); redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const exportJson = useCallback(() => {
     const blob = new Blob([JSON.stringify(mod, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -264,7 +292,7 @@ function Builder() {
       } catch { flash("Invalid mod file"); }
     };
     r.readAsText(file);
-  }, []);
+  }, [setMod]);
 
   const installToRoster = useCallback(() => {
     if (!activeFighter) return;
@@ -274,6 +302,19 @@ function Builder() {
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
     flash(`${activeFighter.name} installed in Fighters menu`);
   }, [activeFighter, installed]);
+
+  // ---- Instant Test in Arena: install + jump to duel ----
+  const testInArena = useCallback(() => {
+    if (!activeFighter) return;
+    if (!activeFighter.spriteDataUrl) { flash("Upload a sprite first"); return; }
+    const next = [...installed.filter((f) => f.id !== activeFighter.id), activeFighter];
+    setInstalled(next);
+    localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
+    try { localStorage.setItem("anif.test.duel", `custom_${activeFighter.id}`); } catch {}
+    flash("Launching duel test…");
+    setTimeout(() => navigate({ to: "/", search: { duel: `custom_${activeFighter.id}` } as never }), 250);
+  }, [activeFighter, installed, navigate]);
+
 
   const uninstall = useCallback((id: string) => {
     const next = installed.filter((f) => f.id !== id);
