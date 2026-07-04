@@ -1459,6 +1459,9 @@ function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: Ef
 function panelStyle(): React.CSSProperties {
   return { background: "rgba(15,15,22,0.85)", border: "1px solid #1f1f2c", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" };
 }
+function subPanelStyle(): React.CSSProperties {
+  return { background: "rgba(9,9,14,0.58)", border: "1px solid #222235", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" };
+}
 function btnStyle(bg: string): React.CSSProperties {
   return { background: bg, border: "1px solid #2a2a3a", color: "#fff", cursor: "pointer" };
 }
