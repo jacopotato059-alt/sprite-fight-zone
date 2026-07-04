@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type DuelModifier = "none" | "glass" | "regen" | "mirror";
+type DuelModifier = "none" | "glass" | "iron" | "mirror";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
@@ -126,13 +126,14 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 
-interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
-interface CustomSkillMeta { name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
+interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; customSkillIndex?: number; }
+interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; }
+interface CustomSkillMeta { id?: string; name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
   atk: number; def: number; speed: number;
   abilities: AbilityDef[]; width: number; height: number;
-  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta };
+  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta; skills?: CustomSkillMeta[] };
 }
 
 const FIGHTERS: Record<FighterTypeId, FighterDef> = {
@@ -240,6 +241,9 @@ interface Fighter {
   cursedFlashReady?: boolean;
   // Sukuna passive — Malevolent Shrine
   shrineCount?: number;
+  customSkill?: CustomSkillMeta;
+  customSkillTimer?: number;
+  playerControlled?: boolean;
   // Dummy — Iron Guard sub-variant
   guardCd?: number;
   guardActive?: number;
@@ -250,15 +254,18 @@ interface Fighter {
   manjiCd?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash" | "custom";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
   pierceLeft?: number; hitUids?: number[];
+  customSkill?: CustomSkillMeta;
 }
 interface Effect {
   uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric" | "shockwave" | "wallspark" | "megaring";
   x: number; y: number; life: number; maxLife: number; seed: number;
+  color?: string; intensity?: number;
 }
+interface ArenaWall { uid: number; x: number; y: number; w: number; h: number; life: number; maxLife: number; }
 
 
 const GRAVITY = 2200;
@@ -331,24 +338,38 @@ function loadInstalledFighters(): CustomFighterInstall[] {
     return Array.isArray(arr) ? arr : [];
   } catch { return []; }
 }
+function loadInstalledSounds(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem("anif.installed.sounds.v1");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch { return {}; }
+}
 
 function registerCustomFighters(list: CustomFighterInstall[]) {
   for (const c of list) {
     const typeId = `custom_${c.id}` as FighterTypeId;
     const meleeSkill = c.skills.find((s) => s.anim !== "projectile") ?? c.skills[0];
     const rangedSkill = c.skills.find((s) => s.anim === "projectile") ?? c.skills[1] ?? c.skills[0];
+    const abilities = c.skills.slice(0, 10).map((skill, index) => ({
+      name: skill.name || `Skill ${index + 1}`,
+      damage: skill.damage ?? 0,
+      type: skill.anim === "projectile" ? "ranged" as const : (skill.anim === "buff" || skill.anim === "heal") ? "status" as const : "melee" as const,
+      cooldown: Math.max(0.1, skill.cooldown ?? 1),
+      customSkillIndex: index,
+    }));
     (FIGHTERS as Record<string, FighterDef>)[typeId] = {
       id: typeId, name: c.name,
       sprite: c.spriteDataUrl ?? dummySprite,
       atk: Math.max(50, meleeSkill?.damage ?? 25),
       def: Math.max(50, c.hp),
       speed: Math.max(0.5, Math.min(2.5, c.speed / 220)),
-      abilities: [
-        { name: meleeSkill?.name ?? "Punch", damage: meleeSkill?.damage ?? 25, type: "melee", cooldown: meleeSkill?.cooldown ?? 1.4 },
-        { name: rangedSkill?.name ?? "Throw", damage: rangedSkill?.damage ?? 25, type: "ranged", cooldown: rangedSkill?.cooldown ?? 1.8 },
+      abilities: abilities.length ? abilities : [
+        { name: "Punch", damage: 25, type: "melee", cooldown: 1.4, customSkillIndex: 0 },
       ],
       width: 64, height: 104,
-      custom: { melee: meleeSkill, ranged: rangedSkill },
+      custom: { melee: meleeSkill, ranged: rangedSkill, skills: c.skills },
     };
   }
 }
@@ -362,21 +383,32 @@ function Game() {
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
+  const [showBeta, setShowBeta] = useState(false);
+  const [playerMode, setPlayerMode] = useState(false);
+  const [controlledUid, setControlledUid] = useState<number | null>(null);
   const [customFighters, setCustomFighters] = useState<CustomFighterInstall[]>([]);
   const [, forceTick] = useState(0);
   const pausedRef = useRef(false);
   const difficultyRef = useRef<AiDifficulty>("normal");
   const hpMultRef = useRef(1);
   const duelModRef = useRef<DuelModifier>("none");
+  const playerModeRef = useRef(false);
+  const controlledUidRef = useRef<number | null>(null);
+  const keysRef = useRef<Record<string, boolean>>({});
+  const stickRef = useRef({ active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 });
+  const customSoundsRef = useRef<Record<string, string>>({});
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
   useEffect(() => { duelModRef.current = duelMod; }, [duelMod]);
+  useEffect(() => { playerModeRef.current = playerMode; }, [playerMode]);
+  useEffect(() => { controlledUidRef.current = controlledUid; }, [controlledUid]);
 
   // Load custom fighters from builder; refresh on storage events / when menu opens.
   useEffect(() => {
     const load = () => {
       const list = loadInstalledFighters();
+      customSoundsRef.current = loadInstalledSounds();
       registerCustomFighters(list);
       setCustomFighters(list);
     };
@@ -391,6 +423,7 @@ function Game() {
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
+  const wallsRef = useRef<ArenaWall[]>([]);
   const damageNumsRef = useRef<{ uid: number; x: number; y: number; vy: number; life: number; maxLife: number; dmg: number; crit: boolean }[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
@@ -452,7 +485,9 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    wallsRef.current = [];
     damageNumsRef.current = [];
+    setControlledUid(null);
     playSound(SOUNDS.click, 0.5);
   }, []);
 
@@ -461,6 +496,161 @@ function Game() {
       uid: nextUid(), kind, x, y,
       life, maxLife: life, seed: Math.random() * 1000,
     });
+  };
+
+  const spawnCustomEffect = (meta: CustomSkillMeta | undefined, x: number, y: number, fallback: Effect["kind"] = "counterburst", intensity = 1) => {
+    const key = meta?.effect ?? "";
+    const kind: Effect["kind"] = key ? (EFFECT_MAP[key] ?? fallback) : fallback;
+    const life = Math.max(0.25, Math.min(1.2, (meta?.duration ?? 0.6) * 0.75)) * Math.max(0.65, Math.min(1.8, intensity));
+    spawnEffect(kind, x, y, life);
+    const rich = meta?.timeline?.filter((k) => k.kind === "spawn-fx") ?? [];
+    for (const k of rich.slice(0, 4)) {
+      const layerKind = k.payload ? (EFFECT_MAP[k.payload] ?? kind) : kind;
+      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1));
+    }
+    if (meta?.timeline?.some((k) => k.kind === "screenshake")) shakeRef.current = Math.max(shakeRef.current, 0.28 * intensity);
+    if (meta?.timeline?.some((k) => k.kind === "hitstop")) hitstopRef.current = Math.max(hitstopRef.current, 0.08 * intensity);
+  };
+
+  const playCustomSkillSound = (meta?: CustomSkillMeta, fallback = SOUNDS.punchHit) => {
+    const sound = meta?.timeline?.find((k) => k.kind === "sound")?.payload ?? meta?.sound;
+    const url = sound ? (customSoundsRef.current[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
+    playSound(url, 0.72);
+  };
+
+  const useCustomSkill = (f: Fighter, idx: number, enemy?: Fighter | null) => {
+    const def = FIGHTERS[f.type];
+    const ability = def.abilities[idx];
+    const meta = def.custom?.skills?.[ability?.customSkillIndex ?? idx] ?? (ability?.type === "ranged" ? def.custom?.ranged : def.custom?.melee);
+    if (!meta || f.abilityCd[idx] > 0 || f.globalCd > 0 || f.state === "dead") return false;
+    const dir = enemy ? ((Math.sign(enemy.x - f.x) || f.facing) as 1 | -1) : f.facing;
+    f.facing = dir;
+    f.customSkill = meta;
+    f.customSkillTimer = meta.duration ?? 0.6;
+    const anim = meta.anim;
+    const range = Math.max(MELEE_RANGE, meta.range ?? (anim === "dash" ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE));
+    if (anim === "projectile") {
+      f.state = "throw"; f.stateTimer = Math.max(0.2, Math.min(0.75, meta.duration ?? 0.35));
+      const speed = Math.max(120, meta.projSpeed ?? PROJECTILE_SPEED);
+      const targetY = enemy ? enemy.y - FIGHTERS[enemy.type].height * 0.55 : f.y - def.height * 0.55;
+      const muzzleY = f.y - def.height * 0.55;
+      const dist = enemy ? Math.max(80, Math.abs(enemy.x - f.x)) : 300;
+      projectilesRef.current.push({
+        uid: nextUid(), ownerUid: f.uid, kind: "custom",
+        x: f.x + dir * 30, y: muzzleY,
+        vx: dir * speed, vy: (targetY - muzzleY) / Math.max(0.12, dist / speed),
+        damage: meta.damage ?? ability.damage, ttl: Math.max(0.7, (meta.range ?? 650) / speed),
+        customSkill: meta,
+      });
+      spawnCustomEffect(meta, f.x + dir * 30, muzzleY, "wallspark", 0.8);
+      playCustomSkillSound(meta, SOUNDS.throwSwing);
+    } else if (anim === "aoe") {
+      f.state = "throw"; f.stateTimer = Math.max(0.28, Math.min(0.9, meta.duration ?? 0.55));
+      const radius = Math.max(70, Math.min(260, meta.range ?? 150));
+      const hitX = f.x + dir * Math.min(radius * 0.35, 60);
+      spawnCustomEffect(meta, hitX, f.y - def.height * 0.45, "shockwave", 1.25);
+      for (const t of fightersRef.current) {
+        if (t.uid === f.uid || t.state === "dead") continue;
+        if (Math.abs(t.x - hitX) < radius && Math.abs(t.y - f.y) < def.height * 1.4) {
+          applyDamage(t, meta.damage ?? ability.damage, dir, f.uid);
+          t.vx = dir * (meta.knockback ?? 560); t.vy = -Math.min(720, (meta.knockback ?? 560) * 0.55);
+          t.stunned = Math.max(t.stunned, meta.stun ?? 0);
+        }
+      }
+      playCustomSkillSound(meta, SOUNDS.damage);
+    } else if (anim === "buff") {
+      f.state = "taunt"; f.stateTimer = Math.max(0.35, meta.duration ?? 0.8);
+      f.sandeActive = Math.max(f.sandeActive, Math.max(1, meta.duration ?? 2));
+      f.hp = Math.min(f.maxHp, f.hp + Math.round((meta.lifesteal ?? 0.12) * f.maxHp));
+      spawnCustomEffect(meta, f.x, f.y - def.height * 0.55, "megaring", 1.1);
+      playCustomSkillSound(meta, SOUNDS.sande);
+    } else if (anim === "heal") {
+      f.state = "taunt"; f.stateTimer = Math.max(0.3, meta.duration ?? 0.6);
+      f.hp = Math.min(f.maxHp, f.hp + Math.max(12, meta.damage ?? 25));
+      spawnCustomEffect(meta, f.x, f.y - def.height * 0.55, "greenfire", 0.9);
+      playCustomSkillSound(meta, SOUNDS.spawn);
+    } else {
+      f.state = "lunge"; f.stateTimer = Math.max(0.12, Math.min(0.65, (meta.duration ?? LUNGE_DURATION) * 0.55));
+      f.lungeFromX = f.x;
+      const dist = enemy ? Math.abs(enemy.x - f.x) : range;
+      f.lungeToX = f.x + dir * Math.min(range, dist + 38);
+      f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = anim === "dash" || (meta.fxSpeed ?? 1) > 1.2;
+      f.lungeDamage = meta.damage ?? ability.damage;
+      f.lungeKind = "custom";
+      spawnCustomEffect(meta, f.x + dir * 32, f.y - def.height * 0.55, "wallspark", 0.75);
+      playCustomSkillSound(meta, SOUNDS.punchLunge);
+    }
+    f.abilityCd[idx] = Math.max(0.1, meta.cooldown ?? ability.cooldown);
+    f.globalCd = Math.max(0.12, Math.min(0.55, (meta.duration ?? 0.6) * 0.45));
+    return true;
+  };
+
+  const usePlayerAbility = (f: Fighter, idx: number) => {
+    const def = FIGHTERS[f.type];
+    const enemy = nearestEnemy(f, fightersRef.current);
+    if (def.custom?.skills?.length) return useCustomSkill(f, idx, enemy);
+    if (!enemy || f.abilityCd[idx] > 0 || f.globalCd > 0 || f.state === "dead") return false;
+    const dx = enemy.x - f.x;
+    const dist = Math.abs(dx);
+    const dir = (Math.sign(dx) || f.facing) as 1 | -1;
+    f.facing = dir;
+    if (f.type === "david") {
+      if (idx === 0) { startSande(f, 3, "full"); f.abilityCd[0] = 12; f.globalCd = 0.3; return true; }
+      if (idx === 1) {
+        f.state = "shoot"; f.stateTimer = 0.55; f.shotsLeft = 3; f.shotTimer = 0; f.shotTarget = enemy.y - FIGHTERS[enemy.type].height * 0.55;
+        f.abilityCd[1] = 5; f.globalCd = 0.5; return true;
+      }
+      if (idx === 2) {
+        startSande(f, 0.8, "short");
+        f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3; f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE, dist + 40);
+        f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true; f.lungeDamage = 50; f.abilityCd[2] = 8; f.globalCd = 0.4; f.lungeKind = "sandy";
+        playSound(SOUNDS.punchLunge, 0.55); return true;
+      }
+    }
+    if (f.type === "yuji" && !f.possessed) {
+      if (idx === 0) {
+        f.state = "windup"; f.stateTimer = 0.12; f.windupKind = "divergent"; f.windupGrow = 0; f.pendingBlack = f.cursedFlashReady || Math.random() < 0.25;
+        if (f.cursedFlashReady) { f.cursedFlashReady = false; f.cursedStacks = 0; }
+        f.abilityCd[0] = 3; f.globalCd = 0.3; return true;
+      }
+      if (idx === 1) { f.counterActive = 2.2; f.abilityCd[1] = 5; f.globalCd = 0.2; triggerReaction(f, "angry"); return true; }
+    }
+    if (f.type === "yuji" && f.possessed) {
+      if (idx === 0) { f.state = "windup"; f.stateTimer = 0.12; f.windupKind = "dismantle"; f.windupGrow = 0; f.abilityCd[0] = 0.9; f.globalCd = 0.25; return true; }
+      if (idx === 1) {
+        f.state = "throw"; f.stateTimer = 0.18;
+        projectilesRef.current.push({ uid: nextUid(), ownerUid: f.uid, kind: "clash", x: f.x + dir * 28, y: f.y - def.height * 0.55, vx: dir * (PROJECTILE_SPEED * 1.25), vy: 0, damage: 18, ttl: 1.4 });
+        f.abilityCd[1] = 2.5; f.globalCd = 0.3; playSound(SOUNDS.throwSwing, 0.5); return true;
+      }
+    }
+    if (f.type === "deku") {
+      if (idx === 0) {
+        f.state = "throw"; f.stateTimer = 0.75; f.vx = 0; f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+        f.abilityCd[0] = 6; f.globalCd = 0.4; playSound(SOUNDS.punchLunge, 0.6); playSound(SOUNDS.electric, 0.5); spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4); return true;
+      }
+      if (idx === 1) {
+        const stack = f.punchStacks ?? 0; const DMG = [34, 45, 59, 67]; const isMega = stack === 3; const isFinalish = stack >= 2;
+        f.state = "lunge"; f.stateTimer = LUNGE_DURATION / (isMega ? 2.2 : 2.5); f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(isMega ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE, dist + (isMega ? 50 : 30));
+        f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true; f.lungeDamage = DMG[Math.min(3, stack)]; f.lungeKind = isMega ? "dekuMega" : isFinalish ? "dekuFinal" : "deku";
+        f.punchPitch = Math.max(0.5, 1 - stack * 0.13); f.punchHitStack = stack;
+        if (stack >= 3) { f.punchStacks = 0; f.punchStackTimer = 0; f.abilityCd[1] = 4; } else { f.punchStacks = stack + 1; f.punchStackTimer = 2.2; f.abilityCd[1] = 0.45; }
+        f.globalCd = isMega ? 0.28 : 0.18; playPitched(SOUNDS.punchLunge, isMega ? 0.75 : 0.55, f.punchPitch); return true;
+      }
+      if (idx === 2) {
+        if (f.onGround && f.jumpCd <= 0) { f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.4; f.jumpsLeft = 1; }
+        f.state = "windup"; f.stateTimer = 1.2; f.windupKind = "detroit"; f.windupGrow = 0; f.abilityCd[2] = 45; f.globalCd = 0.6; playSound(SOUNDS.detroitSmash, 0.9); return true;
+      }
+    }
+    const ability = def.abilities[idx];
+    if (!ability) return false;
+    if (ability.type === "ranged") {
+      f.state = "throw"; f.stateTimer = 0.28;
+      projectilesRef.current.push({ uid: nextUid(), ownerUid: f.uid, kind: "cotton", x: f.x + dir * 28, y: f.y - def.height * 0.55, vx: dir * PROJECTILE_SPEED, vy: -140, damage: ability.damage, ttl: 3 });
+      f.abilityCd[idx] = ability.cooldown; f.globalCd = 0.4; playSound(SOUNDS.throwSwing, 0.55); return true;
+    }
+    f.state = "lunge"; f.stateTimer = LUNGE_DURATION; f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE, dist + 30);
+    f.lungeProgress = 0; f.lungeHit = false; f.lungeDamage = ability.damage; f.abilityCd[idx] = ability.cooldown; f.globalCd = 0.4; playSound(SOUNDS.punchLunge, 0.55);
+    return true;
   };
 
   // Hitstop = brief slowdown on heavy hits. Shake = arena rumble. Both feel-good polish.
@@ -519,13 +709,30 @@ function Game() {
   // Spacebar = pause/play
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      keysRef.current[e.code] = true;
+      const n = Number(e.key);
+      if (playerModeRef.current && controlledUidRef.current && n >= 1 && n <= 10 && !(e.target instanceof HTMLInputElement)) {
+        const f = fightersRef.current.find((x) => x.uid === controlledUidRef.current && x.state !== "dead");
+        if (f) usePlayerAbility(f, n - 1);
+      }
       if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault();
-        setPaused((p) => !p);
+        if (playerModeRef.current && controlledUidRef.current) {
+          const f = fightersRef.current.find((x) => x.uid === controlledUidRef.current && x.state !== "dead");
+          if (f && f.jumpCd <= 0 && (f.onGround || f.jumpsLeft > 0)) {
+            f.vy = f.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+            if (!f.onGround) f.jumpsLeft -= 1;
+            f.onGround = false; f.jumpCd = 0.25;
+          }
+        } else {
+          setPaused((p) => !p);
+        }
       }
     };
+    const onKeyUp = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   }, []);
 
   const incomingThreat = (f: Fighter) => {
@@ -610,6 +817,10 @@ function Game() {
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
+      if (f.customSkillTimer !== undefined) {
+        f.customSkillTimer = Math.max(0, f.customSkillTimer - dt);
+        if (f.customSkillTimer <= 0 && f.state !== "lunge") f.customSkill = undefined;
+      }
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       f.stunned = Math.max(0, f.stunned - dt);
       f.counterActive = Math.max(0, f.counterActive - dt);
@@ -820,18 +1031,13 @@ function Game() {
                   t2.stunned = Math.max(t2.stunned, 0.7);
                 }
               } else if (f.lungeKind === "custom") {
-                const meta = def.custom?.melee;
+                const meta = f.customSkill ?? def.custom?.melee;
                 const fxKind: Effect["kind"] = (meta?.effect ? (EFFECT_MAP[meta.effect] ?? "counterburst") : "counterburst");
-                spawnEffect(fxKind, hitX, hitY, 0.55);
+                spawnCustomEffect(meta, hitX, hitY, fxKind, 1.15);
                 if (meta?.effect && (meta.effect === "nova" || meta.effect === "blackhole" || meta.effect === "shockwave")) {
                   spawnEffect("shockwave", hitX, hitY + 20, 0.7);
                 }
-                // Custom sound — fall back to default punch
-                const url = meta?.sound ? `__custom_${meta.sound}` : undefined;
-                if (url && (FIGHTERS as Record<string, FighterDef>)[f.type]) {
-                  try { const a = new Audio(); a.volume = 0.7; /* sound lookup omitted */ } catch {}
-                }
-                playSound(SOUNDS.punchHit, 0.7);
+                playCustomSkillSound(meta, SOUNDS.punchHit);
                 // Multi-hit, knockback, lifesteal, stun
                 const hits = Math.max(1, meta?.hits ?? 1);
                 for (let h = 1; h < hits; h++) {
@@ -847,6 +1053,7 @@ function Game() {
                   f.hp = Math.min(f.maxHp, f.hp + Math.round((f.lungeDamage ?? 0) * ls));
                   f.hitFlash = Math.max(f.hitFlash, 0.1);
                 }
+                if (meta?.passive === "berserk" && f.hp / f.maxHp < 0.3) f.globalCd = 0.05;
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
@@ -967,6 +1174,27 @@ function Game() {
       } else {
         // ===== SMART AI =====
         // pick enemy - prefer the one that taunted us, else nearest
+        if (playerModeRef.current && controlledUidRef.current === f.uid) {
+          const horizontal = (keysRef.current.KeyD || keysRef.current.ArrowRight ? 1 : 0) - (keysRef.current.KeyA || keysRef.current.ArrowLeft ? 1 : 0);
+          const stickX = stickRef.current.active ? stickRef.current.dx : 0;
+          const move = Math.abs(stickX) > 0.18 ? Math.sign(stickX) : horizontal;
+          if (move !== 0) {
+            f.facing = move as 1 | -1;
+            if (f.onGround) f.vx = move * WALK_SPEED_BASE * def.speed * 1.55;
+            else f.vx += Math.sign(move * MAX_AIR_SPEED - f.vx) * AIR_ACCEL * dt * 1.25;
+            f.state = "walk"; f.walkPhase += dt * 14;
+          } else if (f.onGround) {
+            f.vx *= 0.7;
+            f.state = "idle";
+          }
+          if (keysRef.current.KeyW || keysRef.current.ArrowUp) {
+            if (f.jumpCd <= 0 && (f.onGround || f.jumpsLeft > 0)) {
+              f.vy = f.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+              if (!f.onGround) f.jumpsLeft -= 1;
+              f.onGround = false; f.jumpCd = 0.25;
+            }
+          }
+        } else {
         let enemy: Fighter | null = null;
         if (f.tauntedBy) {
           enemy = fighters.find((o) => o.uid === f.tauntedBy && o.state !== "dead") ?? null;
@@ -1333,6 +1561,16 @@ function Game() {
               continue;
             }
           } else {
+            if (def.custom?.skills?.length) {
+              const ready = def.abilities
+                .map((a, i) => ({ a, i, meta: def.custom?.skills?.[a.customSkillIndex ?? i] }))
+                .filter((x) => x.meta && tryUse(x.i));
+              const closeSkill = ready.find((x) => x.a.type === "melee" && dist < Math.max(MELEE_RANGE, x.meta?.range ?? LUNGE_DISTANCE) * 1.08);
+              const rangedSkill = ready.find((x) => x.a.type === "ranged" && dist > MELEE_RANGE * 1.1 && dist < Math.max(240, x.meta?.range ?? w * 0.8));
+              const statusSkill = ready.find((x) => x.a.type === "status" && (hpRatio < 0.65 || f.intent === "punish"));
+              const chosen = (f.intent === "retreat" ? statusSkill : null) ?? closeSkill ?? rangedSkill ?? statusSkill;
+              if (chosen && useCustomSkill(f, chosen.i, enemy)) continue;
+            }
             // Dummy — Iron Guard (12s CD): pop 50% damage reduction for 2.5s when threatened.
             const aboutToHitDummy = (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.9)
               || (enemy.state === "windup" && dist < LUNGE_DISTANCE * 1.1)
@@ -1458,6 +1696,7 @@ function Game() {
           f.vx *= 0.85;
           f.state = "idle";
         }
+        }
       }
 
       // ===== Anti-overlap separation =====
@@ -1549,6 +1788,16 @@ function Game() {
             playSound(SOUNDS.knife, 0.7);
             spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.3);
             return false;
+          } else if (p.kind === "custom") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            spawnCustomEffect(p.customSkill, t.x, t.y - tdef.height * 0.55, "counterburst", 1);
+            playCustomSkillSound(p.customSkill, SOUNDS.damage);
+            if ((p.customSkill?.knockback ?? 0) > 0) {
+              t.vx = Math.sign(p.vx) * (p.customSkill?.knockback ?? 0);
+              t.vy = -Math.min(640, (p.customSkill?.knockback ?? 0) * 0.45);
+            }
+            if ((p.customSkill?.stun ?? 0) > 0) t.stunned = Math.max(t.stunned, p.customSkill?.stun ?? 0);
+            return false;
           } else {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.damage, 0.45);
@@ -1558,6 +1807,30 @@ function Game() {
       }
       return true;
     });
+
+    // Arena walls from Iron Walls modifier
+    if (wallsRef.current.length) {
+      for (const wall of wallsRef.current) wall.life -= dt;
+      wallsRef.current = wallsRef.current.filter((wall) => wall.life > 0);
+      for (const wall of wallsRef.current) {
+        for (const f of fighters) {
+          const def = FIGHTERS[f.type];
+          if (f.state === "dead") continue;
+          const left = f.x - def.width / 2;
+          const right = f.x + def.width / 2;
+          const top = f.y - def.height;
+          const bottom = f.y;
+          if (right > wall.x && left < wall.x + wall.w && bottom > wall.y && top < wall.y + wall.h) {
+            const pushLeft = Math.abs(right - wall.x);
+            const pushRight = Math.abs(wall.x + wall.w - left);
+            if (pushLeft < pushRight) { f.x = wall.x - def.width / 2; f.vx = -Math.abs(f.vx) * 0.45 - 160; }
+            else { f.x = wall.x + wall.w + def.width / 2; f.vx = Math.abs(f.vx) * 0.45 + 160; }
+            f.stunned = Math.max(f.stunned, 0.12);
+            spawnEffect("wallspark", f.x, Math.max(wall.y, Math.min(wall.y + wall.h, f.y - def.height * 0.5)), 0.25);
+          }
+        }
+      }
+    }
 
     // ===== Effects aging =====
     if (effectsRef.current.length) {
@@ -1783,7 +2056,9 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    wallsRef.current = [];
     damageNumsRef.current = [];
+    setControlledUid(null);
     setPaused(false);
     playSound(SOUNDS.click, 0.5);
     // Manually spawn at opposite sides
@@ -1795,7 +2070,7 @@ function Game() {
       const mod = duelModRef.current;
       let hpScale = hpMultRef.current;
       if (mod === "glass") hpScale *= 0.5;
-      if (mod === "regen") hpScale *= 1.3;
+      if (mod === "iron") hpScale *= 1.18;
       const maxHp = Math.round(d.def * hpScale);
       return {
         uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
@@ -1817,6 +2092,15 @@ function Game() {
     if (mod === "mirror") b = a;
     fightersRef.current.push(make(a, w * 0.25, 1));
     fightersRef.current.push(make(b, w * 0.75, -1));
+    if (mod === "iron") {
+      const groundY = (sizeRef.current.h || window.innerHeight) - GROUND_OFFSET;
+      wallsRef.current = [
+        { uid: nextUid(), x: w * 0.5 - 24, y: groundY - 185, w: 48, h: 185, life: 999, maxLife: 999 },
+        { uid: nextUid(), x: w * 0.18, y: groundY - 110, w: 36, h: 110, life: 999, maxLife: 999 },
+        { uid: nextUid(), x: w * 0.82 - 36, y: groundY - 110, w: 36, h: 110, life: 999, maxLife: 999 },
+      ];
+      spawnEffect("wallspark", w * 0.5, groundY - 120, 0.75);
+    }
     playSound(SOUNDS.spawn, 0.5);
   }, []);
 
@@ -1833,6 +2117,9 @@ function Game() {
     return () => clearTimeout(tid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search?.duel, customFighters]);
+
+  const controlled = fightersRef.current.find((f) => f.uid === controlledUid && f.state !== "dead") ?? null;
+  const controlledDef = controlled ? FIGHTERS[controlled.type] : null;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
@@ -1859,6 +2146,9 @@ function Game() {
             style={{ width: 90 }} />
         </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setShowBeta((v) => !v); }} style={{ background: playerMode ? "#1f6a4a" : "#2d244a" }}>
+          Beta
+        </button>
         <Link to="/builder" className="mc-btn" style={{ background: "#3b2469", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
           Builder
         </Link>
@@ -1887,6 +2177,21 @@ function Game() {
           borderTop: "2px solid #000",
           boxShadow: "inset 0 2px 0 0 #4a4a4a",
         }} />
+
+        {wallsRef.current.map((wall) => (
+          <div key={wall.uid} className="absolute pointer-events-none"
+            style={{
+              left: wall.x, top: wall.y, width: wall.w, height: wall.h,
+              background: "linear-gradient(90deg, #111 0%, #3d3d3d 45%, #151515 100%)",
+              border: "3px solid #000",
+              boxShadow: "inset 3px 0 0 #787878, inset -3px 0 0 #080808, 0 0 18px rgba(255,255,255,0.22)",
+              imageRendering: "pixelated",
+            }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="absolute" style={{ left: 4, right: 4, top: `${12 + i * 13}%`, height: 2, background: "#000", opacity: 0.45 }} />
+            ))}
+          </div>
+        ))}
 
         {/* Afterimages layer (under fighters) */}
         {fightersRef.current.flatMap((f) => {
@@ -1943,8 +2248,22 @@ function Game() {
                 height: def.height,
                 transform: `translateY(${wave}px)`,
               }}
-              onClick={(e) => { e.stopPropagation(); removeFighter(f.uid); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (playerMode) { setControlledUid(f.uid); f.playerControlled = true; }
+                else removeFighter(f.uid);
+              }}
+              onPointerDown={(e) => {
+                if (!playerMode) return;
+                e.stopPropagation();
+                setControlledUid(f.uid);
+                f.playerControlled = true;
+                playSound(SOUNDS.click, 0.45);
+              }}
             >
+              {playerMode && controlledUid === f.uid && (
+                <div className="absolute -inset-2 pointer-events-none" style={{ border: "2px solid #6fffd0", boxShadow: "0 0 18px #3affc5", borderRadius: 8 }} />
+              )}
               <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 120 }}>
                 <div style={{ fontFamily: "Chakra Petch", fontSize: possessed ? 7.5 : 9, fontWeight: 700, color: possessed ? "#ff5a6e" : "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1, lineHeight: 1.1 }}>
                   {displayName.toUpperCase()}
@@ -2138,6 +2457,19 @@ function Game() {
                 transform: `scaleX(${Math.sign(p.vx) || 1}) skewX(-20deg)`,
                 filter: "drop-shadow(0 0 6px rgba(220,60,80,0.85))",
                 borderRadius: 4,
+              }} />
+          ) : p.kind === "custom" ? (
+            <div key={p.uid} className="absolute pointer-events-none"
+              style={{
+                left: p.x - 16, top: p.y - 16, width: 32, height: 32,
+                borderRadius: p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? 3 : "50%",
+                background: p.customSkill?.color
+                  ? `radial-gradient(circle, #fff 0%, ${p.customSkill.color} 42%, transparent 75%)`
+                  : "radial-gradient(circle, #fff 0%, #9be0ff 55%, transparent 78%)",
+                border: "1px solid rgba(255,255,255,0.8)",
+                boxShadow: `0 0 14px ${p.customSkill?.color ?? "#9be0ff"}`,
+                transform: `scaleX(${Math.sign(p.vx) || 1}) ${p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? "skewX(-22deg) scaleX(1.8)" : ""}`,
+                mixBlendMode: "screen",
               }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
@@ -2469,6 +2801,77 @@ function Game() {
         })}
       </div>
 
+      {playerMode && controlled && controlledDef && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-35 flex flex-col gap-2 items-end">
+          {controlledDef.abilities.slice(0, 10).map((a, i) => {
+            const cd = controlled.abilityCd[i] ?? 0;
+            const ready = cd <= 0.01;
+            return (
+              <button key={`${controlled.uid}-${a.name}-${i}`} className="mc-btn small min-w-[118px] text-left"
+                title={`${i + 1}: ${a.name}`}
+                style={{ opacity: ready ? 1 : 0.45, background: ready ? "#2a4a3e" : undefined }}
+                onClick={() => usePlayerAbility(controlled, i)}>
+                {i + 1}. {a.name.slice(0, 12)} {ready ? "" : cd.toFixed(1)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {playerMode && (
+        <div className="sm:hidden absolute inset-x-0 bottom-5 z-35 pointer-events-none">
+          <div
+            className="absolute left-5 bottom-0 h-28 w-28 rounded-full pointer-events-auto"
+            style={{ background: "rgba(255,255,255,0.07)", border: "2px solid rgba(255,255,255,0.18)", touchAction: "none" }}
+            onPointerDown={(e) => {
+              stickRef.current = { active: true, id: e.pointerId, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0 };
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              if (!stickRef.current.active || stickRef.current.id !== e.pointerId) return;
+              const dx = Math.max(-1, Math.min(1, (e.clientX - stickRef.current.sx) / 42));
+              const dy = Math.max(-1, Math.min(1, (e.clientY - stickRef.current.sy) / 42));
+              stickRef.current.dx = dx; stickRef.current.dy = dy;
+            }}
+            onPointerUp={(e) => { if (stickRef.current.id === e.pointerId) stickRef.current = { active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 }; }}
+          >
+            <div className="absolute left-1/2 top-1/2 h-10 w-10 rounded-full" style={{
+              background: "rgba(255,255,255,0.18)", border: "2px solid rgba(255,255,255,0.28)",
+              transform: `translate(calc(-50% + ${stickRef.current.dx * 34}px), calc(-50% + ${stickRef.current.dy * 34}px))`,
+            }} />
+          </div>
+          <button className="mc-btn pointer-events-auto absolute right-5 bottom-2 h-16 w-16 rounded-full"
+            onClick={() => {
+              if (!controlled) return;
+              if (controlled.jumpCd <= 0 && (controlled.onGround || controlled.jumpsLeft > 0)) {
+                controlled.vy = controlled.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+                if (!controlled.onGround) controlled.jumpsLeft -= 1;
+                controlled.onGround = false; controlled.jumpCd = 0.25;
+              }
+            }}>JUMP</button>
+        </div>
+      )}
+
+      {showBeta && (
+        <div className="absolute left-4 top-20 z-45 mc-panel p-4" style={{ width: "min(92vw, 360px)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="title-text" style={{ fontSize: 14 }}>Beta Features</div>
+            <button className="mc-btn small danger" onClick={() => setShowBeta(false)}>X</button>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer" style={{ fontFamily: "Chakra Petch", fontSize: 12, color: "#f0f0f0" }}>
+            <input type="checkbox" checked={playerMode} onChange={(e) => {
+              setPlayerMode(e.target.checked);
+              if (!e.target.checked) setControlledUid(null);
+              playSound(SOUNDS.click, 0.45);
+            }} />
+            <span>
+              <b>Player Mode</b><br />
+              Click a spawned fighter to control it. PC: WASD/arrow keys, Space jump, 1–10 abilities. Mobile: left thumbstick, right jump, ability buttons.
+            </span>
+          </label>
+        </div>
+      )}
+
 
 
       {showFighters && (
@@ -2530,7 +2933,7 @@ function Game() {
                       <select value={duelMod} onChange={(e) => setDuelMod(e.target.value as DuelModifier)} className="mc-btn small" style={{ padding: "4px 8px", fontFamily: "Chakra Petch", fontSize: 11 }}>
                         <option value="none">Standard</option>
                         <option value="glass">Glass Cannon (½ HP)</option>
-                        <option value="regen">Iron Walls (1.3× HP)</option>
+                        <option value="iron">Iron Walls (spawn walls)</option>
                         <option value="mirror">Mirror Match</option>
                       </select>
                     </div>
