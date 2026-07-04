@@ -485,7 +485,9 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    wallsRef.current = [];
     damageNumsRef.current = [];
+    setControlledUid(null);
     playSound(SOUNDS.click, 0.5);
   }, []);
 
@@ -1986,7 +1988,9 @@ function Game() {
     fightersRef.current = [];
     projectilesRef.current = [];
     effectsRef.current = [];
+    wallsRef.current = [];
     damageNumsRef.current = [];
+    setControlledUid(null);
     setPaused(false);
     playSound(SOUNDS.click, 0.5);
     // Manually spawn at opposite sides
@@ -2020,6 +2024,15 @@ function Game() {
     if (mod === "mirror") b = a;
     fightersRef.current.push(make(a, w * 0.25, 1));
     fightersRef.current.push(make(b, w * 0.75, -1));
+    if (mod === "iron") {
+      const groundY = (sizeRef.current.h || window.innerHeight) - GROUND_OFFSET;
+      wallsRef.current = [
+        { uid: nextUid(), x: w * 0.5 - 24, y: groundY - 185, w: 48, h: 185, life: 999, maxLife: 999 },
+        { uid: nextUid(), x: w * 0.18, y: groundY - 110, w: 36, h: 110, life: 999, maxLife: 999 },
+        { uid: nextUid(), x: w * 0.82 - 36, y: groundY - 110, w: 36, h: 110, life: 999, maxLife: 999 },
+      ];
+      spawnEffect("wallspark", w * 0.5, groundY - 120, 0.75);
+    }
     playSound(SOUNDS.spawn, 0.5);
   }, []);
 
@@ -2036,6 +2049,9 @@ function Game() {
     return () => clearTimeout(tid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search?.duel, customFighters]);
+
+  const controlled = fightersRef.current.find((f) => f.uid === controlledUid && f.state !== "dead") ?? null;
+  const controlledDef = controlled ? FIGHTERS[controlled.type] : null;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden gradient-bg">
@@ -2062,6 +2078,9 @@ function Game() {
             style={{ width: 90 }} />
         </div>
         <button className="mc-btn" onClick={onFightersClick}>Fighters</button>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setShowBeta((v) => !v); }} style={{ background: playerMode ? "#1f6a4a" : "#2d244a" }}>
+          Beta
+        </button>
         <Link to="/builder" className="mc-btn" style={{ background: "#3b2469", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
           Builder
         </Link>
@@ -2090,6 +2109,21 @@ function Game() {
           borderTop: "2px solid #000",
           boxShadow: "inset 0 2px 0 0 #4a4a4a",
         }} />
+
+        {wallsRef.current.map((wall) => (
+          <div key={wall.uid} className="absolute pointer-events-none"
+            style={{
+              left: wall.x, top: wall.y, width: wall.w, height: wall.h,
+              background: "linear-gradient(90deg, #111 0%, #3d3d3d 45%, #151515 100%)",
+              border: "3px solid #000",
+              boxShadow: "inset 3px 0 0 #787878, inset -3px 0 0 #080808, 0 0 18px rgba(255,255,255,0.22)",
+              imageRendering: "pixelated",
+            }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="absolute" style={{ left: 4, right: 4, top: `${12 + i * 13}%`, height: 2, background: "#000", opacity: 0.45 }} />
+            ))}
+          </div>
+        ))}
 
         {/* Afterimages layer (under fighters) */}
         {fightersRef.current.flatMap((f) => {
@@ -2147,7 +2181,17 @@ function Game() {
                 transform: `translateY(${wave}px)`,
               }}
               onClick={(e) => { e.stopPropagation(); removeFighter(f.uid); }}
+              onPointerDown={(e) => {
+                if (!playerMode) return;
+                e.stopPropagation();
+                setControlledUid(f.uid);
+                f.playerControlled = true;
+                playSound(SOUNDS.click, 0.45);
+              }}
             >
+              {playerMode && controlledUid === f.uid && (
+                <div className="absolute -inset-2 pointer-events-none" style={{ border: "2px solid #6fffd0", boxShadow: "0 0 18px #3affc5", borderRadius: 8 }} />
+              )}
               <div className="absolute left-1/2 -translate-x-1/2 -top-10 text-center" style={{ width: 120 }}>
                 <div style={{ fontFamily: "Chakra Petch", fontSize: possessed ? 7.5 : 9, fontWeight: 700, color: possessed ? "#ff5a6e" : "#f0f0f0", textShadow: "1px 1px 0 #000", letterSpacing: 1, lineHeight: 1.1 }}>
                   {displayName.toUpperCase()}
@@ -2341,6 +2385,19 @@ function Game() {
                 transform: `scaleX(${Math.sign(p.vx) || 1}) skewX(-20deg)`,
                 filter: "drop-shadow(0 0 6px rgba(220,60,80,0.85))",
                 borderRadius: 4,
+              }} />
+          ) : p.kind === "custom" ? (
+            <div key={p.uid} className="absolute pointer-events-none"
+              style={{
+                left: p.x - 16, top: p.y - 16, width: 32, height: 32,
+                borderRadius: p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? 3 : "50%",
+                background: p.customSkill?.color
+                  ? `radial-gradient(circle, #fff 0%, ${p.customSkill.color} 42%, transparent 75%)`
+                  : "radial-gradient(circle, #fff 0%, #9be0ff 55%, transparent 78%)",
+                border: "1px solid rgba(255,255,255,0.8)",
+                boxShadow: `0 0 14px ${p.customSkill?.color ?? "#9be0ff"}`,
+                transform: `scaleX(${Math.sign(p.vx) || 1}) ${p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? "skewX(-22deg) scaleX(1.8)" : ""}`,
+                mixBlendMode: "screen",
               }} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
@@ -2672,6 +2729,77 @@ function Game() {
         })}
       </div>
 
+      {playerMode && controlled && controlledDef && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-35 flex flex-col gap-2 items-end">
+          {controlledDef.abilities.slice(0, 10).map((a, i) => {
+            const cd = controlled.abilityCd[i] ?? 0;
+            const ready = cd <= 0.01;
+            return (
+              <button key={`${controlled.uid}-${a.name}-${i}`} className="mc-btn small min-w-[118px] text-left"
+                title={`${i + 1}: ${a.name}`}
+                style={{ opacity: ready ? 1 : 0.45, background: ready ? "#2a4a3e" : undefined }}
+                onClick={() => useCustomSkill(controlled, i, nearestEnemy(controlled, fightersRef.current))}>
+                {i + 1}. {a.name.slice(0, 12)} {ready ? "" : cd.toFixed(1)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {playerMode && (
+        <div className="sm:hidden absolute inset-x-0 bottom-5 z-35 pointer-events-none">
+          <div
+            className="absolute left-5 bottom-0 h-28 w-28 rounded-full pointer-events-auto"
+            style={{ background: "rgba(255,255,255,0.07)", border: "2px solid rgba(255,255,255,0.18)", touchAction: "none" }}
+            onPointerDown={(e) => {
+              stickRef.current = { active: true, id: e.pointerId, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0 };
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              if (!stickRef.current.active || stickRef.current.id !== e.pointerId) return;
+              const dx = Math.max(-1, Math.min(1, (e.clientX - stickRef.current.sx) / 42));
+              const dy = Math.max(-1, Math.min(1, (e.clientY - stickRef.current.sy) / 42));
+              stickRef.current.dx = dx; stickRef.current.dy = dy;
+            }}
+            onPointerUp={(e) => { if (stickRef.current.id === e.pointerId) stickRef.current = { active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 }; }}
+          >
+            <div className="absolute left-1/2 top-1/2 h-10 w-10 rounded-full" style={{
+              background: "rgba(255,255,255,0.18)", border: "2px solid rgba(255,255,255,0.28)",
+              transform: `translate(calc(-50% + ${stickRef.current.dx * 34}px), calc(-50% + ${stickRef.current.dy * 34}px))`,
+            }} />
+          </div>
+          <button className="mc-btn pointer-events-auto absolute right-5 bottom-2 h-16 w-16 rounded-full"
+            onClick={() => {
+              if (!controlled) return;
+              if (controlled.jumpCd <= 0 && (controlled.onGround || controlled.jumpsLeft > 0)) {
+                controlled.vy = controlled.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+                if (!controlled.onGround) controlled.jumpsLeft -= 1;
+                controlled.onGround = false; controlled.jumpCd = 0.25;
+              }
+            }}>JUMP</button>
+        </div>
+      )}
+
+      {showBeta && (
+        <div className="absolute left-4 top-20 z-45 mc-panel p-4" style={{ width: "min(92vw, 360px)" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="title-text" style={{ fontSize: 14 }}>Beta Features</div>
+            <button className="mc-btn small danger" onClick={() => setShowBeta(false)}>X</button>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer" style={{ fontFamily: "Chakra Petch", fontSize: 12, color: "#f0f0f0" }}>
+            <input type="checkbox" checked={playerMode} onChange={(e) => {
+              setPlayerMode(e.target.checked);
+              if (!e.target.checked) setControlledUid(null);
+              playSound(SOUNDS.click, 0.45);
+            }} />
+            <span>
+              <b>Player Mode</b><br />
+              Click a spawned fighter to control it. PC: WASD/arrow keys, Space jump, 1–10 abilities. Mobile: left thumbstick, right jump, ability buttons.
+            </span>
+          </label>
+        </div>
+      )}
+
 
 
       {showFighters && (
@@ -2733,7 +2861,7 @@ function Game() {
                       <select value={duelMod} onChange={(e) => setDuelMod(e.target.value as DuelModifier)} className="mc-btn small" style={{ padding: "4px 8px", fontFamily: "Chakra Petch", fontSize: 11 }}>
                         <option value="none">Standard</option>
                         <option value="glass">Glass Cannon (½ HP)</option>
-                        <option value="iron">Iron Walls (arena walls)</option>
+                        <option value="iron">Iron Walls (spawn walls)</option>
                         <option value="mirror">Mirror Match</option>
                       </select>
                     </div>
