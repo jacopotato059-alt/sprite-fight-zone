@@ -639,13 +639,30 @@ function Game() {
   // Spacebar = pause/play
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      keysRef.current[e.code] = true;
+      const n = Number(e.key);
+      if (playerModeRef.current && controlledUidRef.current && n >= 1 && n <= 10 && !(e.target instanceof HTMLInputElement)) {
+        const f = fightersRef.current.find((x) => x.uid === controlledUidRef.current && x.state !== "dead");
+        if (f) useCustomSkill(f, n - 1, nearestEnemy(f, fightersRef.current));
+      }
       if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault();
-        setPaused((p) => !p);
+        if (playerModeRef.current && controlledUidRef.current) {
+          const f = fightersRef.current.find((x) => x.uid === controlledUidRef.current && x.state !== "dead");
+          if (f && f.jumpCd <= 0 && (f.onGround || f.jumpsLeft > 0)) {
+            f.vy = f.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+            if (!f.onGround) f.jumpsLeft -= 1;
+            f.onGround = false; f.jumpCd = 0.25;
+          }
+        } else {
+          setPaused((p) => !p);
+        }
       }
     };
+    const onKeyUp = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); };
   }, []);
 
   const incomingThreat = (f: Fighter) => {
@@ -1087,6 +1104,27 @@ function Game() {
       } else {
         // ===== SMART AI =====
         // pick enemy - prefer the one that taunted us, else nearest
+        if (playerModeRef.current && controlledUidRef.current === f.uid) {
+          const horizontal = (keysRef.current.KeyD || keysRef.current.ArrowRight ? 1 : 0) - (keysRef.current.KeyA || keysRef.current.ArrowLeft ? 1 : 0);
+          const stickX = stickRef.current.active ? stickRef.current.dx : 0;
+          const move = Math.abs(stickX) > 0.18 ? Math.sign(stickX) : horizontal;
+          if (move !== 0) {
+            f.facing = move as 1 | -1;
+            if (f.onGround) f.vx = move * WALK_SPEED_BASE * def.speed * 1.55;
+            else f.vx += Math.sign(move * MAX_AIR_SPEED - f.vx) * AIR_ACCEL * dt * 1.25;
+            f.state = "walk"; f.walkPhase += dt * 14;
+          } else if (f.onGround) {
+            f.vx *= 0.7;
+            f.state = "idle";
+          }
+          if (keysRef.current.KeyW || keysRef.current.ArrowUp) {
+            if (f.jumpCd <= 0 && (f.onGround || f.jumpsLeft > 0)) {
+              f.vy = f.onGround ? JUMP_VELOCITY : JUMP_VELOCITY * 0.85;
+              if (!f.onGround) f.jumpsLeft -= 1;
+              f.onGround = false; f.jumpCd = 0.25;
+            }
+          }
+        } else {
         let enemy: Fighter | null = null;
         if (f.tauntedBy) {
           enemy = fighters.find((o) => o.uid === f.tauntedBy && o.state !== "dead") ?? null;
@@ -1587,6 +1625,7 @@ function Game() {
         } else {
           f.vx *= 0.85;
           f.state = "idle";
+        }
         }
       }
 
