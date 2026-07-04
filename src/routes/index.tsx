@@ -730,6 +730,10 @@ function Game() {
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
+      if (f.customSkillTimer !== undefined) {
+        f.customSkillTimer = Math.max(0, f.customSkillTimer - dt);
+        if (f.customSkillTimer <= 0 && f.state !== "lunge") f.customSkill = undefined;
+      }
       f.sandeAttackCd = Math.max(0, f.sandeAttackCd - dt);
       f.stunned = Math.max(0, f.stunned - dt);
       f.counterActive = Math.max(0, f.counterActive - dt);
@@ -940,18 +944,13 @@ function Game() {
                   t2.stunned = Math.max(t2.stunned, 0.7);
                 }
               } else if (f.lungeKind === "custom") {
-                const meta = def.custom?.melee;
+                const meta = f.customSkill ?? def.custom?.melee;
                 const fxKind: Effect["kind"] = (meta?.effect ? (EFFECT_MAP[meta.effect] ?? "counterburst") : "counterburst");
-                spawnEffect(fxKind, hitX, hitY, 0.55);
+                spawnCustomEffect(meta, hitX, hitY, fxKind, 1.15);
                 if (meta?.effect && (meta.effect === "nova" || meta.effect === "blackhole" || meta.effect === "shockwave")) {
                   spawnEffect("shockwave", hitX, hitY + 20, 0.7);
                 }
-                // Custom sound — fall back to default punch
-                const url = meta?.sound ? `__custom_${meta.sound}` : undefined;
-                if (url && (FIGHTERS as Record<string, FighterDef>)[f.type]) {
-                  try { const a = new Audio(); a.volume = 0.7; /* sound lookup omitted */ } catch {}
-                }
-                playSound(SOUNDS.punchHit, 0.7);
+                playCustomSkillSound(meta, SOUNDS.punchHit);
                 // Multi-hit, knockback, lifesteal, stun
                 const hits = Math.max(1, meta?.hits ?? 1);
                 for (let h = 1; h < hits; h++) {
@@ -967,6 +966,7 @@ function Game() {
                   f.hp = Math.min(f.maxHp, f.hp + Math.round((f.lungeDamage ?? 0) * ls));
                   f.hitFlash = Math.max(f.hitFlash, 0.1);
                 }
+                if (meta?.passive === "berserk" && f.hp / f.maxHp < 0.3) f.globalCd = 0.05;
               } else {
                 playSound(SOUNDS.punchHit, 0.7);
               }
@@ -1453,6 +1453,16 @@ function Game() {
               continue;
             }
           } else {
+            if (def.custom?.skills?.length) {
+              const ready = def.abilities
+                .map((a, i) => ({ a, i, meta: def.custom?.skills?.[a.customSkillIndex ?? i] }))
+                .filter((x) => x.meta && tryUse(x.i));
+              const closeSkill = ready.find((x) => x.a.type === "melee" && dist < Math.max(MELEE_RANGE, x.meta?.range ?? LUNGE_DISTANCE) * 1.08);
+              const rangedSkill = ready.find((x) => x.a.type === "ranged" && dist > MELEE_RANGE * 1.1 && dist < Math.max(240, x.meta?.range ?? w * 0.8));
+              const statusSkill = ready.find((x) => x.a.type === "status" && (hpRatio < 0.65 || f.intent === "punish"));
+              const chosen = (f.intent === "retreat" ? statusSkill : null) ?? closeSkill ?? rangedSkill ?? statusSkill;
+              if (chosen && useCustomSkill(f, chosen.i, enemy)) continue;
+            }
             // Dummy — Iron Guard (12s CD): pop 50% damage reduction for 2.5s when threatened.
             const aboutToHitDummy = (enemy.state === "lunge" && dist < LUNGE_DISTANCE * 0.9)
               || (enemy.state === "windup" && dist < LUNGE_DISTANCE * 1.1)
@@ -1669,6 +1679,16 @@ function Game() {
             playSound(SOUNDS.knife, 0.7);
             spawnEffect("cut", t.x, t.y - tdef.height * 0.55, 0.3);
             return false;
+          } else if (p.kind === "custom") {
+            applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
+            spawnCustomEffect(p.customSkill, t.x, t.y - tdef.height * 0.55, "counterburst", 1);
+            playCustomSkillSound(p.customSkill, SOUNDS.damage);
+            if ((p.customSkill?.knockback ?? 0) > 0) {
+              t.vx = Math.sign(p.vx) * (p.customSkill?.knockback ?? 0);
+              t.vy = -Math.min(640, (p.customSkill?.knockback ?? 0) * 0.45);
+            }
+            if ((p.customSkill?.stun ?? 0) > 0) t.stunned = Math.max(t.stunned, p.customSkill?.stun ?? 0);
+            return false;
           } else {
             applyDamage(t, p.damage, Math.sign(p.vx) as 1 | -1, p.ownerUid);
             playSound(SOUNDS.damage, 0.45);
@@ -1678,6 +1698,30 @@ function Game() {
       }
       return true;
     });
+
+    // Arena walls from Iron Walls modifier
+    if (wallsRef.current.length) {
+      for (const wall of wallsRef.current) wall.life -= dt;
+      wallsRef.current = wallsRef.current.filter((wall) => wall.life > 0);
+      for (const wall of wallsRef.current) {
+        for (const f of fighters) {
+          const def = FIGHTERS[f.type];
+          if (f.state === "dead") continue;
+          const left = f.x - def.width / 2;
+          const right = f.x + def.width / 2;
+          const top = f.y - def.height;
+          const bottom = f.y;
+          if (right > wall.x && left < wall.x + wall.w && bottom > wall.y && top < wall.y + wall.h) {
+            const pushLeft = Math.abs(right - wall.x);
+            const pushRight = Math.abs(wall.x + wall.w - left);
+            if (pushLeft < pushRight) { f.x = wall.x - def.width / 2; f.vx = -Math.abs(f.vx) * 0.45 - 160; }
+            else { f.x = wall.x + wall.w + def.width / 2; f.vx = Math.abs(f.vx) * 0.45 + 160; }
+            f.stunned = Math.max(f.stunned, 0.12);
+            spawnEffect("wallspark", f.x, Math.max(wall.y, Math.min(wall.y + wall.h, f.y - def.height * 0.5)), 0.25);
+          }
+        }
+      }
+    }
 
     // ===== Effects aging =====
     if (effectsRef.current.length) {
