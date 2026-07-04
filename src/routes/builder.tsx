@@ -111,6 +111,71 @@ const ANIM_TYPES: { id: AnimType; label: string }[] = [
   { id: "heal", label: "Heal" },
 ];
 
+const ATTACK_TEMPLATES: (Omit<Skill, "id"> & { blurb: string; preview: EffectPreset[] })[] = [
+  {
+    name: "Rush Breaker", anim: "dash", damage: 34, cooldown: 3.2, range: 170,
+    projSpeed: 0, duration: 0.62, effect: "slash", color: "#ff4d6d", sound: "punch-lunge",
+    passive: "none", fxSpeed: 1.3, hits: 2, knockback: 520, lifesteal: 0, stun: 0.15,
+    blurb: "Fast forward burst. Great as a combo starter because it closes distance and pops a second hit.",
+    preview: ["trail", "slash", "spark"],
+    timeline: [
+      { t: 0.08, kind: "startup", intensity: 0.6 },
+      { t: 0.2, kind: "sound", payload: "punch-lunge", intensity: 1 },
+      { t: 0.28, kind: "spawn-fx", payload: "trail", intensity: 1.2 },
+      { t: 0.42, kind: "damage", intensity: 1 },
+      { t: 0.45, kind: "spawn-fx", payload: "slash", intensity: 1.1 },
+      { t: 0.72, kind: "recovery", intensity: 0.5 },
+    ],
+  },
+  {
+    name: "Arc Projectile", anim: "projectile", damage: 26, cooldown: 2.6, range: 520,
+    projSpeed: 780, duration: 0.74, effect: "vortex", color: "#62e7ff", sound: "throw-swing",
+    passive: "none", fxSpeed: 1, hits: 1, knockback: 340, lifesteal: 0, stun: 0,
+    blurb: "Throws a custom projectile. In game it travels with your authored speed, effect, sound, and damage.",
+    preview: ["vortex", "ring", "stars"],
+    timeline: [
+      { t: 0.12, kind: "startup", intensity: 0.7 },
+      { t: 0.28, kind: "sound", payload: "throw-swing", intensity: 1 },
+      { t: 0.34, kind: "spawn-projectile", payload: "vortex", intensity: 1.1 },
+      { t: 0.38, kind: "spawn-fx", payload: "ring", intensity: 0.7 },
+      { t: 0.72, kind: "recovery", intensity: 0.5 },
+    ],
+  },
+  {
+    name: "Ground Eruption", anim: "aoe", damage: 42, cooldown: 7.5, range: 180,
+    projSpeed: 0, duration: 1, effect: "geyser", color: "#ffb13b", sound: "detroit-smash",
+    passive: "none", fxSpeed: 0.85, hits: 3, knockback: 720, lifesteal: 0, stun: 0.35,
+    blurb: "Short-range area burst. Best when enemies crowd you; launches and stuns on impact.",
+    preview: ["shockwave", "geyser", "nova"],
+    timeline: [
+      { t: 0.1, kind: "startup", intensity: 1 },
+      { t: 0.22, kind: "screenshake", intensity: 1.4 },
+      { t: 0.32, kind: "spawn-fx", payload: "shockwave", intensity: 1.1 },
+      { t: 0.43, kind: "damage", intensity: 1.3 },
+      { t: 0.45, kind: "spawn-fx", payload: "geyser", intensity: 1.5 },
+      { t: 0.48, kind: "sound", payload: "detroit-smash", intensity: 1 },
+      { t: 0.82, kind: "recovery", intensity: 0.6 },
+    ],
+  },
+  {
+    name: "Black Flash Chain", anim: "melee", damage: 56, cooldown: 8.5, range: 95,
+    projSpeed: 0, duration: 0.86, effect: "blackflash", color: "#e11d48", sound: "black-flash",
+    passive: "reservoir", fxSpeed: 1.45, hits: 4, knockback: 980, lifesteal: 0.08, stun: 0.45,
+    blurb: "Heavy multi-hit finisher. Uses layered black/red burst effects, hitstop, lifesteal, and big knockback.",
+    preview: ["blackflash", "crimson", "nova"],
+    timeline: [
+      { t: 0.08, kind: "startup", intensity: 0.8 },
+      { t: 0.22, kind: "sound", payload: "black-flash", intensity: 1 },
+      { t: 0.28, kind: "hitstop", intensity: 1.5 },
+      { t: 0.34, kind: "damage", intensity: 1.2 },
+      { t: 0.36, kind: "spawn-fx", payload: "blackflash", intensity: 1.6 },
+      { t: 0.42, kind: "spawn-fx", payload: "crimson", intensity: 1.1 },
+      { t: 0.6, kind: "screenshake", intensity: 1.4 },
+      { t: 0.78, kind: "recovery", intensity: 0.7 },
+    ],
+  },
+];
+
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 function newSkill(name = "New Skill"): Skill {
@@ -161,6 +226,7 @@ function loadInstalled(): Fighter[] {
 // ---------------- Component ----------------
 function Builder() {
   const navigate = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [mod, _setMod] = useState<Mod>(() =>
     typeof window === "undefined"
       ? { version: 1, savedAt: Date.now(), fighters: [newFighter()], customSounds: {} }
@@ -300,8 +366,9 @@ function Builder() {
     const next = [...installed.filter((f) => f.id !== activeFighter.id), activeFighter];
     setInstalled(next);
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
+    localStorage.setItem("anif.installed.sounds.v1", JSON.stringify(mod.customSounds ?? {}));
     flash(`${activeFighter.name} installed in Fighters menu`);
-  }, [activeFighter, installed]);
+  }, [activeFighter, installed, mod.customSounds]);
 
   // ---- Instant Test in Arena: install + jump to duel ----
   const testInArena = useCallback(() => {
@@ -310,10 +377,11 @@ function Builder() {
     const next = [...installed.filter((f) => f.id !== activeFighter.id), activeFighter];
     setInstalled(next);
     localStorage.setItem(INSTALLED_KEY, JSON.stringify(next));
+    localStorage.setItem("anif.installed.sounds.v1", JSON.stringify(mod.customSounds ?? {}));
     try { localStorage.setItem("anif.test.duel", `custom_${activeFighter.id}`); } catch {}
     flash("Launching duel test…");
     setTimeout(() => navigate({ to: "/", search: { duel: `custom_${activeFighter.id}` } as never }), 250);
-  }, [activeFighter, installed, navigate]);
+  }, [activeFighter, installed, navigate, mod.customSounds]);
 
 
   const uninstall = useCallback((id: string) => {
@@ -348,6 +416,13 @@ function Builder() {
     const s = newSkill(`Skill ${(activeFighter?.skills.length ?? 0) + 1}`);
     updateFighter((f) => ({ ...f, skills: [...f.skills, s] }));
     setActiveSkillId(s.id);
+  };
+  const applyTemplate = (tpl: (typeof ATTACK_TEMPLATES)[number]) => {
+    if (!activeSkill) return;
+    updateSkill((s) => ({ ...s, ...tpl, id: s.id }));
+    setPreviewT(0);
+    setPlaying(true);
+    flash(`${tpl.name} template applied`);
   };
   const removeSkill = () => {
     if (!activeFighter || !activeSkill) return;
@@ -402,7 +477,8 @@ function Builder() {
   // ---- Render ----
   return (
     <div
-      className="min-h-screen w-full text-white"
+      ref={scrollRef}
+      className="h-screen w-full overflow-y-auto text-white"
       style={{
         background:
           "radial-gradient(1200px 600px at 20% -10%, #2b1750 0%, transparent 60%), radial-gradient(1000px 500px at 110% 110%, #0c2a3a 0%, transparent 55%), #0a0a12",
@@ -410,7 +486,7 @@ function Builder() {
       }}
     >
       <FxKeyframes />
-      <header className="flex flex-wrap items-center justify-between gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
         style={{ borderColor: "#1d1d2a", background: "rgba(10,10,18,0.85)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <Link to="/" className="px-3 py-1.5 rounded text-xs tracking-widest shrink-0"
@@ -420,7 +496,7 @@ function Builder() {
             <div className="text-base sm:text-xl font-bold tracking-wider truncate">Fighter & Skill Builder</div>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end items-center">
+        <div className="flex gap-2 flex-wrap justify-end items-center max-w-[56vw] sm:max-w-none">
           <span className="text-[10px] opacity-50 hidden sm:inline">autosave ✓ {autosaveTick}</span>
           <button title="Undo (Ctrl+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={undo}>↶</button>
           <button title="Redo (Ctrl+Shift+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={redo}>↷</button>
@@ -437,14 +513,14 @@ function Builder() {
         </div>
       </header>
 
-      <div className="grid gap-4 p-3 sm:p-4 grid-cols-1 lg:[grid-template-columns:240px_1fr_300px]">
+      <div className="grid gap-4 p-3 sm:p-4 grid-cols-1 lg:[grid-template-columns:260px_minmax(0,1fr)] xl:[grid-template-columns:260px_minmax(0,1fr)_320px]">
         {/* Fighters list */}
         <aside className="rounded-lg p-3" style={panelStyle()}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs tracking-widest opacity-70">FIGHTERS</div>
             <button className="text-xs px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={addFighter}>+ NEW</button>
           </div>
-          <div className="flex flex-col gap-2 max-h-[40vh] lg:max-h-[60vh] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-2 max-h-[34vh] lg:max-h-[62vh] overflow-y-auto pr-1">
             {mod.fighters.map((f) => {
               const inRoster = installed.some((x) => x.id === f.id);
               return (
@@ -534,8 +610,50 @@ function Builder() {
 
               {activeSkill && (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                    <div>
+                  <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
+                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-3 items-end">
+                      <div>
+                        <Label>Move Name</Label>
+                        <input value={activeSkill.name}
+                          onChange={(e) => updateSkill((s) => ({ ...s, name: e.target.value }))}
+                          className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-base font-bold" />
+                      </div>
+                      <div>
+                        <Label>Attack Type</Label>
+                        <select value={activeSkill.anim}
+                          onChange={(e) => updateSkill((s) => ({ ...s, anim: e.target.value as AnimType }))}
+                          className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-sm">
+                          {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <Label>Attack Templates — hover for how it works</Label>
+                      <span className="text-[10px] opacity-50">Click one to replace this move</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+                      {ATTACK_TEMPLATES.map((tpl) => (
+                        <button key={tpl.name} type="button" title={tpl.blurb}
+                          onClick={() => applyTemplate(tpl)}
+                          className="group relative h-28 overflow-hidden rounded text-left p-2"
+                          style={{ background: "#0d0d14", border: "1px solid #2a2a3a" }}>
+                          <div className="absolute inset-0 opacity-80">
+                            {tpl.preview.map((p, i) => <FxBlob key={p + i} preset={p} color={tpl.color} intensity={0.65 + i * 0.18} playing fxSpeed={tpl.fxSpeed ?? 1} />)}
+                          </div>
+                          <div className="relative z-10 font-bold text-xs tracking-wider">{tpl.name}</div>
+                          <div className="relative z-10 mt-1 text-[10px] opacity-70">{tpl.anim.toUpperCase()} • {tpl.damage} DMG • {tpl.cooldown}s</div>
+                          <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform p-2 text-[10px] leading-snug"
+                            style={{ background: "rgba(0,0,0,0.86)" }}>{tpl.blurb}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 rounded-lg p-3" style={subPanelStyle()}>
+                    <div className="hidden">
                       <Label>Name</Label>
                       <input value={activeSkill.name}
                         onChange={(e) => updateSkill((s) => ({ ...s, name: e.target.value }))}
@@ -581,9 +699,9 @@ function Builder() {
                   </div>
 
                   {/* Effect picker as a visual grid */}
-                  <div className="mb-4">
+                  <div className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
                     <Label>Effect Preset (live previews — click to choose)</Label>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
                       {EFFECT_PRESETS.map((e) => (
                         <button key={e}
                           onClick={() => updateSkill((s) => ({ ...s, effect: e }))}
@@ -601,7 +719,7 @@ function Builder() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 rounded-lg p-3" style={subPanelStyle()}>
                     <div>
                       <Label>Effect Color</Label>
                       <div className="flex items-center gap-2">
@@ -633,6 +751,7 @@ function Builder() {
                     </div>
                   </div>
 
+                  <section className="rounded-lg p-3" style={subPanelStyle()}>
                   <TimelineEditor
                     skill={activeSkill}
                     previewT={previewT}
@@ -643,6 +762,7 @@ function Builder() {
                     onScrub={(t) => { setPlaying(false); setPreviewT(t); lastSoundTRef.current = t; }}
                     onChange={(timeline) => updateSkill((s) => ({ ...s, timeline }))}
                   />
+                  </section>
 
                   <PreviewPane skill={activeSkill} t={previewT} />
                 </>
@@ -652,10 +772,10 @@ function Builder() {
         </main>
 
         {/* Right: Inspector */}
-        <aside className="rounded-lg p-3 flex flex-col gap-3" style={panelStyle()}>
+        <aside className="rounded-lg p-3 flex flex-col gap-3 lg:col-span-2 xl:col-span-1" style={panelStyle()}>
           <div className="text-xs tracking-widest opacity-70">MOD INSPECTOR</div>
           <textarea readOnly value={JSON.stringify(mod, null, 2)}
-            className="bg-[#0d0d14] text-[10px] font-mono p-2 rounded border h-48 lg:h-[400px]"
+            className="bg-[#0d0d14] text-[10px] font-mono p-2 rounded border h-40 xl:h-[400px]"
             style={{ borderColor: "#1f1f2c" }} />
           <div className="text-[11px] opacity-70 leading-relaxed">
             <div className="font-bold opacity-90 mb-1">Tips</div>
@@ -669,9 +789,9 @@ function Builder() {
 
       {/* Floating scroll buttons */}
       <div className="fixed right-3 bottom-16 z-40 flex flex-col gap-2">
-        <button title="Scroll to top" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        <button title="Scroll to top" onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
           className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↑</button>
-        <button title="Scroll to bottom" onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })}
+        <button title="Scroll to bottom" onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })}
           className="w-10 h-10 rounded-full text-base" style={{ ...btnStyle("#1b1b28"), boxShadow: "0 4px 14px rgba(0,0,0,0.5)" }}>↓</button>
       </div>
 
