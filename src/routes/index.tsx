@@ -585,6 +585,74 @@ function Game() {
     return true;
   };
 
+  const usePlayerAbility = (f: Fighter, idx: number) => {
+    const def = FIGHTERS[f.type];
+    const enemy = nearestEnemy(f, fightersRef.current);
+    if (def.custom?.skills?.length) return useCustomSkill(f, idx, enemy);
+    if (!enemy || f.abilityCd[idx] > 0 || f.globalCd > 0 || f.state === "dead") return false;
+    const dx = enemy.x - f.x;
+    const dist = Math.abs(dx);
+    const dir = (Math.sign(dx) || f.facing) as 1 | -1;
+    f.facing = dir;
+    if (f.type === "david") {
+      if (idx === 0) { startSande(f, 3, "full"); f.abilityCd[0] = 12; f.globalCd = 0.3; return true; }
+      if (idx === 1) {
+        f.state = "shoot"; f.stateTimer = 0.55; f.shotsLeft = 3; f.shotTimer = 0; f.shotTarget = enemy.y - FIGHTERS[enemy.type].height * 0.55;
+        f.abilityCd[1] = 5; f.globalCd = 0.5; return true;
+      }
+      if (idx === 2) {
+        startSande(f, 0.8, "short");
+        f.state = "lunge"; f.stateTimer = LUNGE_DURATION / 3; f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE, dist + 40);
+        f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true; f.lungeDamage = 50; f.abilityCd[2] = 8; f.globalCd = 0.4; f.lungeKind = "sandy";
+        playSound(SOUNDS.punchLunge, 0.55); return true;
+      }
+    }
+    if (f.type === "yuji" && !f.possessed) {
+      if (idx === 0) {
+        f.state = "windup"; f.stateTimer = 0.12; f.windupKind = "divergent"; f.windupGrow = 0; f.pendingBlack = f.cursedFlashReady || Math.random() < 0.25;
+        if (f.cursedFlashReady) { f.cursedFlashReady = false; f.cursedStacks = 0; }
+        f.abilityCd[0] = 3; f.globalCd = 0.3; return true;
+      }
+      if (idx === 1) { f.counterActive = 2.2; f.abilityCd[1] = 5; f.globalCd = 0.2; triggerReaction(f, "angry"); return true; }
+    }
+    if (f.type === "yuji" && f.possessed) {
+      if (idx === 0) { f.state = "windup"; f.stateTimer = 0.12; f.windupKind = "dismantle"; f.windupGrow = 0; f.abilityCd[0] = 0.9; f.globalCd = 0.25; return true; }
+      if (idx === 1) {
+        f.state = "throw"; f.stateTimer = 0.18;
+        projectilesRef.current.push({ uid: nextUid(), ownerUid: f.uid, kind: "clash", x: f.x + dir * 28, y: f.y - def.height * 0.55, vx: dir * (PROJECTILE_SPEED * 1.25), vy: 0, damage: 18, ttl: 1.4 });
+        f.abilityCd[1] = 2.5; f.globalCd = 0.3; playSound(SOUNDS.throwSwing, 0.5); return true;
+      }
+    }
+    if (f.type === "deku") {
+      if (idx === 0) {
+        f.state = "throw"; f.stateTimer = 0.75; f.vx = 0; f.whip = { mode: "enemy", targetUid: enemy.uid, t: 0, phase: "extend", sourceY: f.y - def.height * 0.55 };
+        f.abilityCd[0] = 6; f.globalCd = 0.4; playSound(SOUNDS.punchLunge, 0.6); playSound(SOUNDS.electric, 0.5); spawnEffect("electric", f.x, f.y - def.height * 0.6, 0.4); return true;
+      }
+      if (idx === 1) {
+        const stack = f.punchStacks ?? 0; const DMG = [34, 45, 59, 67]; const isMega = stack === 3; const isFinalish = stack >= 2;
+        f.state = "lunge"; f.stateTimer = LUNGE_DURATION / (isMega ? 2.2 : 2.5); f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(isMega ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE, dist + (isMega ? 50 : 30));
+        f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = true; f.lungeDamage = DMG[Math.min(3, stack)]; f.lungeKind = isMega ? "dekuMega" : isFinalish ? "dekuFinal" : "deku";
+        f.punchPitch = Math.max(0.5, 1 - stack * 0.13); f.punchHitStack = stack;
+        if (stack >= 3) { f.punchStacks = 0; f.punchStackTimer = 0; f.abilityCd[1] = 4; } else { f.punchStacks = stack + 1; f.punchStackTimer = 2.2; f.abilityCd[1] = 0.45; }
+        f.globalCd = isMega ? 0.28 : 0.18; playPitched(SOUNDS.punchLunge, isMega ? 0.75 : 0.55, f.punchPitch); return true;
+      }
+      if (idx === 2) {
+        if (f.onGround && f.jumpCd <= 0) { f.vy = HIGH_JUMP_VELOCITY; f.jumpCd = 0.4; f.jumpsLeft = 1; }
+        f.state = "windup"; f.stateTimer = 1.2; f.windupKind = "detroit"; f.windupGrow = 0; f.abilityCd[2] = 45; f.globalCd = 0.6; playSound(SOUNDS.detroitSmash, 0.9); return true;
+      }
+    }
+    const ability = def.abilities[idx];
+    if (!ability) return false;
+    if (ability.type === "ranged") {
+      f.state = "throw"; f.stateTimer = 0.28;
+      projectilesRef.current.push({ uid: nextUid(), ownerUid: f.uid, kind: "cotton", x: f.x + dir * 28, y: f.y - def.height * 0.55, vx: dir * PROJECTILE_SPEED, vy: -140, damage: ability.damage, ttl: 3 });
+      f.abilityCd[idx] = ability.cooldown; f.globalCd = 0.4; playSound(SOUNDS.throwSwing, 0.55); return true;
+    }
+    f.state = "lunge"; f.stateTimer = LUNGE_DURATION; f.lungeFromX = f.x; f.lungeToX = f.x + dir * Math.min(LUNGE_DISTANCE, dist + 30);
+    f.lungeProgress = 0; f.lungeHit = false; f.lungeDamage = ability.damage; f.abilityCd[idx] = ability.cooldown; f.globalCd = 0.4; playSound(SOUNDS.punchLunge, 0.55);
+    return true;
+  };
+
   // Hitstop = brief slowdown on heavy hits. Shake = arena rumble. Both feel-good polish.
   const bigHit = (dmg: number) => {
     if (dmg >= 60) { hitstopRef.current = Math.max(hitstopRef.current, 0.11); shakeRef.current = Math.max(shakeRef.current, 0.45); }
