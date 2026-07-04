@@ -713,7 +713,7 @@ function Game() {
       const n = Number(e.key);
       if (playerModeRef.current && controlledUidRef.current && n >= 1 && n <= 10 && !(e.target instanceof HTMLInputElement)) {
         const f = fightersRef.current.find((x) => x.uid === controlledUidRef.current && x.state !== "dead");
-        if (f) useCustomSkill(f, n - 1, nearestEnemy(f, fightersRef.current));
+        if (f) usePlayerAbility(f, n - 1);
       }
       if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
         e.preventDefault();
@@ -2810,7 +2810,7 @@ function Game() {
               <button key={`${controlled.uid}-${a.name}-${i}`} className="mc-btn small min-w-[118px] text-left"
                 title={`${i + 1}: ${a.name}`}
                 style={{ opacity: ready ? 1 : 0.45, background: ready ? "#2a4a3e" : undefined }}
-                onClick={() => useCustomSkill(controlled, i, nearestEnemy(controlled, fightersRef.current))}>
+                onClick={() => usePlayerAbility(controlled, i)}>
                 {i + 1}. {a.name.slice(0, 12)} {ready ? "" : cd.toFixed(1)}
               </button>
             );
