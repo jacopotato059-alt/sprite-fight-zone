@@ -496,6 +496,93 @@ function Game() {
     });
   };
 
+  const spawnCustomEffect = (meta: CustomSkillMeta | undefined, x: number, y: number, fallback: Effect["kind"] = "counterburst", intensity = 1) => {
+    const key = meta?.effect ?? "";
+    const kind: Effect["kind"] = key ? (EFFECT_MAP[key] ?? fallback) : fallback;
+    const life = Math.max(0.25, Math.min(1.2, (meta?.duration ?? 0.6) * 0.75)) * Math.max(0.65, Math.min(1.8, intensity));
+    spawnEffect(kind, x, y, life);
+    const rich = meta?.timeline?.filter((k) => k.kind === "spawn-fx") ?? [];
+    for (const k of rich.slice(0, 4)) {
+      const layerKind = k.payload ? (EFFECT_MAP[k.payload] ?? kind) : kind;
+      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1));
+    }
+    if (meta?.timeline?.some((k) => k.kind === "screenshake")) shakeRef.current = Math.max(shakeRef.current, 0.28 * intensity);
+    if (meta?.timeline?.some((k) => k.kind === "hitstop")) hitstopRef.current = Math.max(hitstopRef.current, 0.08 * intensity);
+  };
+
+  const playCustomSkillSound = (meta?: CustomSkillMeta, fallback = SOUNDS.punchHit) => {
+    const sound = meta?.timeline?.find((k) => k.kind === "sound")?.payload ?? meta?.sound;
+    const url = sound ? (customSoundsRef.current[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
+    playSound(url, 0.72);
+  };
+
+  const useCustomSkill = (f: Fighter, idx: number, enemy?: Fighter | null) => {
+    const def = FIGHTERS[f.type];
+    const ability = def.abilities[idx];
+    const meta = def.custom?.skills?.[ability?.customSkillIndex ?? idx] ?? (ability?.type === "ranged" ? def.custom?.ranged : def.custom?.melee);
+    if (!meta || f.abilityCd[idx] > 0 || f.globalCd > 0 || f.state === "dead") return false;
+    const dir = enemy ? ((Math.sign(enemy.x - f.x) || f.facing) as 1 | -1) : f.facing;
+    f.facing = dir;
+    f.customSkill = meta;
+    f.customSkillTimer = meta.duration ?? 0.6;
+    const anim = meta.anim;
+    const range = Math.max(MELEE_RANGE, meta.range ?? (anim === "dash" ? LUNGE_DISTANCE * 1.25 : LUNGE_DISTANCE));
+    if (anim === "projectile") {
+      f.state = "throw"; f.stateTimer = Math.max(0.2, Math.min(0.75, meta.duration ?? 0.35));
+      const speed = Math.max(120, meta.projSpeed ?? PROJECTILE_SPEED);
+      const targetY = enemy ? enemy.y - FIGHTERS[enemy.type].height * 0.55 : f.y - def.height * 0.55;
+      const muzzleY = f.y - def.height * 0.55;
+      const dist = enemy ? Math.max(80, Math.abs(enemy.x - f.x)) : 300;
+      projectilesRef.current.push({
+        uid: nextUid(), ownerUid: f.uid, kind: "custom",
+        x: f.x + dir * 30, y: muzzleY,
+        vx: dir * speed, vy: (targetY - muzzleY) / Math.max(0.12, dist / speed),
+        damage: meta.damage ?? ability.damage, ttl: Math.max(0.7, (meta.range ?? 650) / speed),
+        customSkill: meta,
+      });
+      spawnCustomEffect(meta, f.x + dir * 30, muzzleY, "wallspark", 0.8);
+      playCustomSkillSound(meta, SOUNDS.throwSwing);
+    } else if (anim === "aoe") {
+      f.state = "throw"; f.stateTimer = Math.max(0.28, Math.min(0.9, meta.duration ?? 0.55));
+      const radius = Math.max(70, Math.min(260, meta.range ?? 150));
+      const hitX = f.x + dir * Math.min(radius * 0.35, 60);
+      spawnCustomEffect(meta, hitX, f.y - def.height * 0.45, "shockwave", 1.25);
+      for (const t of fightersRef.current) {
+        if (t.uid === f.uid || t.state === "dead") continue;
+        if (Math.abs(t.x - hitX) < radius && Math.abs(t.y - f.y) < def.height * 1.4) {
+          applyDamage(t, meta.damage ?? ability.damage, dir, f.uid);
+          t.vx = dir * (meta.knockback ?? 560); t.vy = -Math.min(720, (meta.knockback ?? 560) * 0.55);
+          t.stunned = Math.max(t.stunned, meta.stun ?? 0);
+        }
+      }
+      playCustomSkillSound(meta, SOUNDS.damage);
+    } else if (anim === "buff") {
+      f.state = "taunt"; f.stateTimer = Math.max(0.35, meta.duration ?? 0.8);
+      f.sandeActive = Math.max(f.sandeActive, Math.max(1, meta.duration ?? 2));
+      f.hp = Math.min(f.maxHp, f.hp + Math.round((meta.lifesteal ?? 0.12) * f.maxHp));
+      spawnCustomEffect(meta, f.x, f.y - def.height * 0.55, "megaring", 1.1);
+      playCustomSkillSound(meta, SOUNDS.sande);
+    } else if (anim === "heal") {
+      f.state = "taunt"; f.stateTimer = Math.max(0.3, meta.duration ?? 0.6);
+      f.hp = Math.min(f.maxHp, f.hp + Math.max(12, meta.damage ?? 25));
+      spawnCustomEffect(meta, f.x, f.y - def.height * 0.55, "greenfire", 0.9);
+      playCustomSkillSound(meta, SOUNDS.spawn);
+    } else {
+      f.state = "lunge"; f.stateTimer = Math.max(0.12, Math.min(0.65, (meta.duration ?? LUNGE_DURATION) * 0.55));
+      f.lungeFromX = f.x;
+      const dist = enemy ? Math.abs(enemy.x - f.x) : range;
+      f.lungeToX = f.x + dir * Math.min(range, dist + 38);
+      f.lungeProgress = 0; f.lungeHit = false; f.lungeFast = anim === "dash" || (meta.fxSpeed ?? 1) > 1.2;
+      f.lungeDamage = meta.damage ?? ability.damage;
+      f.lungeKind = "custom";
+      spawnCustomEffect(meta, f.x + dir * 32, f.y - def.height * 0.55, "wallspark", 0.75);
+      playCustomSkillSound(meta, SOUNDS.punchLunge);
+    }
+    f.abilityCd[idx] = Math.max(0.1, meta.cooldown ?? ability.cooldown);
+    f.globalCd = Math.max(0.12, Math.min(0.55, (meta.duration ?? 0.6) * 0.45));
+    return true;
+  };
+
   // Hitstop = brief slowdown on heavy hits. Shake = arena rumble. Both feel-good polish.
   const bigHit = (dmg: number) => {
     if (dmg >= 60) { hitstopRef.current = Math.max(hitstopRef.current, 0.11); shakeRef.current = Math.max(shakeRef.current, 0.45); }
