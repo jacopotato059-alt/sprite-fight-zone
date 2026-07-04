@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type DuelModifier = "none" | "glass" | "regen" | "mirror";
+type DuelModifier = "none" | "glass" | "iron" | "mirror";
 import dummySprite from "@/assets/dummy.png";
 import davidAsset from "@/assets/david.png.asset.json";
 import gunAsset from "@/assets/gun.png.asset.json";
@@ -126,13 +126,14 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 
-interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; }
-interface CustomSkillMeta { name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
+interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; customSkillIndex?: number; }
+interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; }
+interface CustomSkillMeta { id?: string; name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
   atk: number; def: number; speed: number;
   abilities: AbilityDef[]; width: number; height: number;
-  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta };
+  custom?: { melee?: CustomSkillMeta; ranged?: CustomSkillMeta; skills?: CustomSkillMeta[] };
 }
 
 const FIGHTERS: Record<FighterTypeId, FighterDef> = {
@@ -240,6 +241,9 @@ interface Fighter {
   cursedFlashReady?: boolean;
   // Sukuna passive — Malevolent Shrine
   shrineCount?: number;
+  customSkill?: CustomSkillMeta;
+  customSkillTimer?: number;
+  playerControlled?: boolean;
   // Dummy — Iron Guard sub-variant
   guardCd?: number;
   guardActive?: number;
@@ -250,15 +254,18 @@ interface Fighter {
   manjiCd?: number;
 }
 interface Projectile {
-  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash";
+  uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash" | "custom";
   x: number; y: number; vx: number; vy: number;
   damage: number; ttl: number;
   pierceLeft?: number; hitUids?: number[];
+  customSkill?: CustomSkillMeta;
 }
 interface Effect {
   uid: number; kind: "bluefire" | "blackflash" | "cut" | "counterburst" | "greenfire" | "electric" | "shockwave" | "wallspark" | "megaring";
   x: number; y: number; life: number; maxLife: number; seed: number;
+  color?: string; intensity?: number;
 }
+interface ArenaWall { uid: number; x: number; y: number; w: number; h: number; life: number; maxLife: number; }
 
 
 const GRAVITY = 2200;
@@ -331,24 +338,38 @@ function loadInstalledFighters(): CustomFighterInstall[] {
     return Array.isArray(arr) ? arr : [];
   } catch { return []; }
 }
+function loadInstalledSounds(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem("anif.installed.sounds.v1");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch { return {}; }
+}
 
 function registerCustomFighters(list: CustomFighterInstall[]) {
   for (const c of list) {
     const typeId = `custom_${c.id}` as FighterTypeId;
     const meleeSkill = c.skills.find((s) => s.anim !== "projectile") ?? c.skills[0];
     const rangedSkill = c.skills.find((s) => s.anim === "projectile") ?? c.skills[1] ?? c.skills[0];
+    const abilities = c.skills.slice(0, 10).map((skill, index) => ({
+      name: skill.name || `Skill ${index + 1}`,
+      damage: skill.damage ?? 0,
+      type: skill.anim === "projectile" ? "ranged" as const : (skill.anim === "buff" || skill.anim === "heal") ? "status" as const : "melee" as const,
+      cooldown: Math.max(0.1, skill.cooldown ?? 1),
+      customSkillIndex: index,
+    }));
     (FIGHTERS as Record<string, FighterDef>)[typeId] = {
       id: typeId, name: c.name,
       sprite: c.spriteDataUrl ?? dummySprite,
       atk: Math.max(50, meleeSkill?.damage ?? 25),
       def: Math.max(50, c.hp),
       speed: Math.max(0.5, Math.min(2.5, c.speed / 220)),
-      abilities: [
-        { name: meleeSkill?.name ?? "Punch", damage: meleeSkill?.damage ?? 25, type: "melee", cooldown: meleeSkill?.cooldown ?? 1.4 },
-        { name: rangedSkill?.name ?? "Throw", damage: rangedSkill?.damage ?? 25, type: "ranged", cooldown: rangedSkill?.cooldown ?? 1.8 },
+      abilities: abilities.length ? abilities : [
+        { name: "Punch", damage: 25, type: "melee", cooldown: 1.4, customSkillIndex: 0 },
       ],
       width: 64, height: 104,
-      custom: { melee: meleeSkill, ranged: rangedSkill },
+      custom: { melee: meleeSkill, ranged: rangedSkill, skills: c.skills },
     };
   }
 }
@@ -362,21 +383,32 @@ function Game() {
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
+  const [showBeta, setShowBeta] = useState(false);
+  const [playerMode, setPlayerMode] = useState(false);
+  const [controlledUid, setControlledUid] = useState<number | null>(null);
   const [customFighters, setCustomFighters] = useState<CustomFighterInstall[]>([]);
   const [, forceTick] = useState(0);
   const pausedRef = useRef(false);
   const difficultyRef = useRef<AiDifficulty>("normal");
   const hpMultRef = useRef(1);
   const duelModRef = useRef<DuelModifier>("none");
+  const playerModeRef = useRef(false);
+  const controlledUidRef = useRef<number | null>(null);
+  const keysRef = useRef<Record<string, boolean>>({});
+  const stickRef = useRef({ active: false, id: -1, sx: 0, sy: 0, dx: 0, dy: 0 });
+  const customSoundsRef = useRef<Record<string, string>>({});
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   useEffect(() => { difficultyRef.current = difficulty; }, [difficulty]);
   useEffect(() => { hpMultRef.current = hpMult; }, [hpMult]);
   useEffect(() => { duelModRef.current = duelMod; }, [duelMod]);
+  useEffect(() => { playerModeRef.current = playerMode; }, [playerMode]);
+  useEffect(() => { controlledUidRef.current = controlledUid; }, [controlledUid]);
 
   // Load custom fighters from builder; refresh on storage events / when menu opens.
   useEffect(() => {
     const load = () => {
       const list = loadInstalledFighters();
+      customSoundsRef.current = loadInstalledSounds();
       registerCustomFighters(list);
       setCustomFighters(list);
     };
@@ -391,6 +423,7 @@ function Game() {
   const fightersRef = useRef<Fighter[]>([]);
   const projectilesRef = useRef<Projectile[]>([]);
   const effectsRef = useRef<Effect[]>([]);
+  const wallsRef = useRef<ArenaWall[]>([]);
   const damageNumsRef = useRef<{ uid: number; x: number; y: number; vy: number; life: number; maxLife: number; dmg: number; crit: boolean }[]>([]);
   const arenaRef = useRef<HTMLDivElement>(null);
   const lastTimeRef = useRef<number>(0);
