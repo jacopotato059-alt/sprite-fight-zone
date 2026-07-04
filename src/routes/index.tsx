@@ -2180,7 +2180,11 @@ function Game() {
                 height: def.height,
                 transform: `translateY(${wave}px)`,
               }}
-              onClick={(e) => { e.stopPropagation(); removeFighter(f.uid); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (playerMode) { setControlledUid(f.uid); f.playerControlled = true; }
+                else removeFighter(f.uid);
+              }}
               onPointerDown={(e) => {
                 if (!playerMode) return;
                 e.stopPropagation();
