@@ -1828,7 +1828,7 @@ function Game() {
       const mod = duelModRef.current;
       let hpScale = hpMultRef.current;
       if (mod === "glass") hpScale *= 0.5;
-      if (mod === "regen") hpScale *= 1.3;
+      if (mod === "iron") hpScale *= 1.18;
       const maxHp = Math.round(d.def * hpScale);
       return {
         uid: nextUid(), type, x, y: -100, vx: 0, vy: 0,
@@ -2563,7 +2563,7 @@ function Game() {
                       <select value={duelMod} onChange={(e) => setDuelMod(e.target.value as DuelModifier)} className="mc-btn small" style={{ padding: "4px 8px", fontFamily: "Chakra Petch", fontSize: 11 }}>
                         <option value="none">Standard</option>
                         <option value="glass">Glass Cannon (½ HP)</option>
-                        <option value="regen">Iron Walls (1.3× HP)</option>
+                        <option value="iron">Iron Walls (arena walls)</option>
                         <option value="mirror">Mirror Match</option>
                       </select>
                     </div>
