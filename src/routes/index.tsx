@@ -57,6 +57,28 @@ const SOUNDS = {
   electric: sndElectric.url,
 };
 
+const BUILDER_SOUND_MAP: Record<string, string> = {
+  "punch-hit": SOUNDS.punchHit,
+  "punch-lunge": SOUNDS.punchLunge,
+  "knife-slash": SOUNDS.knife,
+  pistol: SOUNDS.pistol,
+  "throw-swing": SOUNDS.throwSwing,
+  "black-flash": SOUNDS.blackFlash,
+  "divergent-hit": SOUNDS.divergent,
+  "finishing-hit": SOUNDS.finishingHit,
+  "detroit-smash": SOUNDS.detroitSmash,
+  electricity: SOUNDS.electric,
+  sandevistan: SOUNDS.sande,
+  "dismantle-1": SOUNDS.dismantle1,
+  "dismantle-2": SOUNDS.dismantle2,
+  "crack-the-whip": SOUNDS.crackWhip,
+  spawn: SOUNDS.spawn,
+  damage: SOUNDS.damage,
+  taunt: SOUNDS.taunt,
+  angry: SOUNDS.angry,
+  chuckle: SOUNDS.chuckle,
+};
+
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
   try {
     const a = new Audio(url);
@@ -127,7 +149,7 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; customSkillIndex?: number; }
-interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; }
+interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; layer?: string; }
 interface CustomSkillMeta { id?: string; name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
@@ -309,6 +331,7 @@ type CustomSkillInstall = {
   name: string; damage: number; cooldown: number; anim: string;
   range?: number; projSpeed?: number; duration?: number;
   effect?: string; color?: string; sound?: string;
+  passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number;
   hits?: number; knockback?: number; lifesteal?: number; stun?: number;
 };
 type CustomFighterInstall = {
@@ -328,6 +351,8 @@ const EFFECT_MAP: Record<string, Effect["kind"]> = {
   smoke: "wallspark", trail: "wallspark", feathers: "wallspark",
   petals: "megaring", stars: "megaring", runes: "megaring",
   ice: "bluefire",
+  neon: "electric", laser: "cut", portal: "megaring", meteor: "greenfire",
+  bloom: "counterburst", glyph: "megaring", afterimage: "wallspark", pixel: "counterburst",
 };
 
 function loadInstalledFighters(): CustomFighterInstall[] {
