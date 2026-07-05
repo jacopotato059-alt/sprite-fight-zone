@@ -1179,16 +1179,25 @@ function TimelineEditor({
 
 function PreviewPane({ skill, t }: { skill: Skill; t: number }) {
   const active = skill.timeline.filter((k) => Math.abs(k.t - t) < 0.08 && (k.kind === "spawn-fx" || k.kind === "active" || k.kind === "damage"));
+  const attackerX = 22 + (skill.anim === "dash" ? 36 * t : skill.anim === "melee" ? 18 * t : 0);
+  const projectileX = 38 + 44 * t;
   return (
     <div className="mt-3 rounded relative overflow-hidden"
-      style={{ height: 180, background: "linear-gradient(180deg,#0c0c14,#15101f)", border: "1px solid #1f1f2c" }}>
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="w-14 h-14 rounded-full" style={{ background: "#2a2a3a", border: "2px solid #44445a", boxShadow: "inset 0 0 12px rgba(0,0,0,0.6)" }} />
-      </div>
+      style={{ height: 220, background: "radial-gradient(500px 140px at 50% 45%, rgba(122,85,214,0.18), transparent 60%), linear-gradient(180deg,#0c0c14,#15101f)", border: "1px solid #1f1f2c" }}>
+      <div className="absolute inset-x-0 bottom-8 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
+      <DummyFigure x={attackerX} y={154} color="#d8d8d8" label="caster" />
+      <DummyFigure x={78} y={154} color="#ef4444" label="enemy" />
+      {skill.anim === "projectile" && (
+        <div className="absolute" style={{ left: `${projectileX}%`, top: 92, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
       {(active.length === 0
-        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing fxSpeed={skill.fxSpeed ?? 1} />]
+        ? [<div key="idle" className="absolute" style={{ left: "58%", top: 92, width: 80, height: 80 }}><FxBlob preset={skill.effect} color={skill.color} intensity={0.55} playing fxSpeed={skill.fxSpeed ?? 1} /></div>]
         : active.map((k, i) => (
-            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+            <div key={i} className="absolute" style={{ left: `${58 + i * 6}%`, top: 92, width: 90, height: 90 }}>
+              <FxBlob preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+            </div>
           ))
       )}
       <div className="absolute bottom-1 left-2 text-[10px] opacity-60">
@@ -1217,6 +1226,10 @@ function FxKeyframes() {
       @keyframes fx-star-twinkle { 0%,100%{opacity:0.2;transform:translate(-50%,-50%) rotate(var(--a)) translate(var(--r),0) scale(0.5)} 50%{opacity:1;transform:translate(-50%,-50%) rotate(var(--a)) translate(var(--r),0) scale(1)} }
       @keyframes fx-lightning-flash { 0%,100%{opacity:0.3;filter:drop-shadow(0 0 0 currentColor)} 50%{opacity:1;filter:drop-shadow(0 0 12px currentColor)} }
       @keyframes fx-ice-grow { 0%{transform:translate(-50%,-50%) scale(0.3) rotate(var(--a));opacity:0} 60%{opacity:1} 100%{transform:translate(-50%,-50%) scale(1.1) rotate(var(--a));opacity:0.6} }
+      @keyframes fx-neon-scan { 0%{transform:translate(-140%,-50%) skewX(-18deg);opacity:0} 40%{opacity:1} 100%{transform:translate(70%,-50%) skewX(-18deg);opacity:0} }
+      @keyframes fx-portal-open { 0%{transform:translate(-50%,-50%) rotate(0deg) scale(0.2);opacity:0} 35%{opacity:1} 100%{transform:translate(-50%,-50%) rotate(360deg) scale(1.35);opacity:0.25} }
+      @keyframes fx-meteor-drop { 0%{transform:translate(-120%,-180%) rotate(-35deg);opacity:0} 30%{opacity:1} 100%{transform:translate(40%,40%) rotate(-35deg);opacity:0} }
+      @keyframes fx-pixel-pop { 0%{transform:translate(-50%,-50%) scale(0.2);opacity:0} 25%{opacity:1} 100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1);opacity:0} }
     `}</style>
   );
 }
@@ -1576,6 +1589,84 @@ function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: Ef
             } as React.CSSProperties} />
           );
         })}
+      </>
+    );
+  }
+
+  if (preset === "neon" || preset === "laser") {
+    const beams = preset === "laser" ? 5 : 3;
+    return (
+      <>
+        {Array.from({ length: beams }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: size * (2.2 + i * 0.25), height: preset === "laser" ? 4 : 9,
+            top: `${42 + i * 7}%`, borderRadius: 8,
+            background: `linear-gradient(90deg, transparent, #fff, ${color}, transparent)`,
+            boxShadow: `0 0 12px ${color}, 0 0 24px ${color}`,
+            animation: `fx-neon-scan ${0.55 + i * 0.08}s ${i * 0.06}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 1.2, height: size * 1.2, borderRadius: "50%", border: `1px solid ${color}`, boxShadow: `0 0 18px ${color}, inset 0 0 14px ${color}`, opacity: 0.55 }} />
+      </>
+    );
+  }
+
+  if (preset === "portal" || preset === "glyph") {
+    return (
+      <>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (1.1 + i * 0.38), height: size * (1.1 + i * 0.38),
+            borderRadius: preset === "glyph" && i === 1 ? 8 : "50%",
+            border: `${2 - i * 0.3}px ${i === 2 ? "dashed" : "solid"} ${color}`,
+            boxShadow: `0 0 14px ${color}`, opacity: 0.85 - i * 0.18,
+            animation: `fx-portal-open ${1 + i * 0.25}s ${i * 0.08}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={`g${i}`} style={{
+            ...common, width: 8, height: 8, borderRadius: 2, background: color,
+            ["--a" as never]: `${(i / 7) * 360}deg`, ["--r" as never]: `${size * 0.62}px`,
+            animation: `fx-star-twinkle 1.25s ${i * 0.07}s infinite ease-in-out${anim}`,
+          } as React.CSSProperties} />
+        ))}
+      </>
+    );
+  }
+
+  if (preset === "meteor" || preset === "afterimage") {
+    return (
+      <>
+        {Array.from({ length: preset === "meteor" ? 6 : 9 }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: size * (preset === "meteor" ? 1.1 : 1.6), height: preset === "meteor" ? 9 : 5,
+            top: `${35 + i * 5}%`, opacity: 0.8 - i * 0.05,
+            background: `linear-gradient(90deg, transparent, ${color}, #fff)`,
+            boxShadow: `0 0 14px ${color}`,
+            animation: `fx-meteor-drop ${0.55 + i * 0.06}s ${i * 0.06}s infinite ease-in${anim}`,
+          }} />
+        ))}
+      </>
+    );
+  }
+
+  if (preset === "bloom" || preset === "pixel") {
+    const count = preset === "pixel" ? 18 : 12;
+    return (
+      <>
+        {Array.from({ length: count }).map((_, i) => {
+          const ang = (i / count) * Math.PI * 2;
+          const dist = 22 + (i % 4) * 9;
+          return <div key={i} style={{
+            ...common, width: preset === "pixel" ? 7 : 10, height: preset === "pixel" ? 7 : 10,
+            borderRadius: preset === "pixel" ? 0 : "50%",
+            background: i % 3 === 0 ? "#fff" : color,
+            boxShadow: `0 0 10px ${color}`,
+            ["--dx" as never]: `${Math.cos(ang) * dist}px`, ["--dy" as never]: `${Math.sin(ang) * dist}px`,
+            animation: `fx-pixel-pop ${0.75 + (i % 3) * 0.1}s ${i * 0.035}s infinite ease-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+        <div style={{ ...common, width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle, ${color}, transparent 70%)`, filter: "blur(8px)", opacity: 0.7 }} />
       </>
     );
   }
