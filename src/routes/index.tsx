@@ -516,22 +516,23 @@ function Game() {
     playSound(SOUNDS.click, 0.5);
   }, []);
 
-  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5) => {
+  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5, color?: string, intensity = 1) => {
     effectsRef.current.push({
       uid: nextUid(), kind, x, y,
-      life, maxLife: life, seed: Math.random() * 1000,
+      life, maxLife: life, seed: Math.random() * 1000, color, intensity,
     });
+    if (effectsRef.current.length > 120) effectsRef.current.splice(0, effectsRef.current.length - 120);
   };
 
   const spawnCustomEffect = (meta: CustomSkillMeta | undefined, x: number, y: number, fallback: Effect["kind"] = "counterburst", intensity = 1) => {
     const key = meta?.effect ?? "";
     const kind: Effect["kind"] = key ? (EFFECT_MAP[key] ?? fallback) : fallback;
     const life = Math.max(0.25, Math.min(1.2, (meta?.duration ?? 0.6) * 0.75)) * Math.max(0.65, Math.min(1.8, intensity));
-    spawnEffect(kind, x, y, life);
+    spawnEffect(kind, x, y, life, meta?.color, intensity);
     const rich = meta?.timeline?.filter((k) => k.kind === "spawn-fx") ?? [];
     for (const k of rich.slice(0, 4)) {
       const layerKind = k.payload ? (EFFECT_MAP[k.payload] ?? kind) : kind;
-      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1));
+      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1), meta?.color, k.intensity ?? intensity);
     }
     if (meta?.timeline?.some((k) => k.kind === "screenshake")) shakeRef.current = Math.max(shakeRef.current, 0.28 * intensity);
     if (meta?.timeline?.some((k) => k.kind === "hitstop")) hitstopRef.current = Math.max(hitstopRef.current, 0.08 * intensity);
@@ -539,7 +540,7 @@ function Game() {
 
   const playCustomSkillSound = (meta?: CustomSkillMeta, fallback = SOUNDS.punchHit) => {
     const sound = meta?.timeline?.find((k) => k.kind === "sound")?.payload ?? meta?.sound;
-    const url = sound ? (customSoundsRef.current[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
+    const url = sound ? (customSoundsRef.current[sound] ?? BUILDER_SOUND_MAP[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
     playSound(url, 0.72);
   };
 
@@ -557,6 +558,7 @@ function Game() {
     if (anim === "projectile") {
       f.state = "throw"; f.stateTimer = Math.max(0.2, Math.min(0.75, meta.duration ?? 0.35));
       const speed = Math.max(120, meta.projSpeed ?? PROJECTILE_SPEED);
+      const projectileFx = meta.timeline?.find((k) => k.kind === "spawn-projectile")?.payload;
       const targetY = enemy ? enemy.y - FIGHTERS[enemy.type].height * 0.55 : f.y - def.height * 0.55;
       const muzzleY = f.y - def.height * 0.55;
       const dist = enemy ? Math.max(80, Math.abs(enemy.x - f.x)) : 300;
@@ -565,7 +567,7 @@ function Game() {
         x: f.x + dir * 30, y: muzzleY,
         vx: dir * speed, vy: (targetY - muzzleY) / Math.max(0.12, dist / speed),
         damage: meta.damage ?? ability.damage, ttl: Math.max(0.7, (meta.range ?? 650) / speed),
-        customSkill: meta,
+        customSkill: projectileFx ? { ...meta, effect: projectileFx } : meta,
       });
       spawnCustomEffect(meta, f.x + dir * 30, muzzleY, "wallspark", 0.8);
       playCustomSkillSound(meta, SOUNDS.throwSwing);
