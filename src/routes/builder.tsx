@@ -271,6 +271,7 @@ function Builder() {
   const soundFileRef = useRef<HTMLInputElement>(null);
   const [previewT, setPreviewT] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [loopPreview, setLoopPreview] = useState(true);
   const lastSoundTRef = useRef<number>(-1);
 
   useEffect(() => {
@@ -467,21 +468,26 @@ function Builder() {
               playSoundPreview(k.payload ?? activeSkill.sound);
             }
           }
-          lastSoundTRef.current = nt >= 1 ? -1 : nt;
-          return nt >= 1 ? 0 : nt;
+          if (nt >= 1) {
+            lastSoundTRef.current = -1;
+            if (!loopPreview) setPlaying(false);
+            return loopPreview ? 0 : 1;
+          }
+          lastSoundTRef.current = nt;
+          return nt;
         });
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, activeSkill, playSoundPreview]);
+  }, [playing, activeSkill, playSoundPreview, loopPreview]);
 
   // ---- Render ----
   return (
     <div
       ref={scrollRef}
-      className="h-screen w-full overflow-y-auto text-white"
+      className="h-screen w-full overflow-y-auto overflow-x-hidden text-white"
       style={{
         background:
           "radial-gradient(1200px 600px at 20% -10%, #2b1750 0%, transparent 60%), radial-gradient(1000px 500px at 110% 110%, #0c2a3a 0%, transparent 55%), #0a0a12",
@@ -489,7 +495,7 @@ function Builder() {
       }}
     >
       <FxKeyframes />
-      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
+      <header className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
         style={{ borderColor: "#1d1d2a", background: "rgba(10,10,18,0.85)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <Link to="/" className="px-3 py-1.5 rounded text-xs tracking-widest shrink-0"
@@ -499,7 +505,7 @@ function Builder() {
             <div className="text-base sm:text-xl font-bold tracking-wider truncate">Fighter & Skill Builder</div>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end items-center max-w-[56vw] sm:max-w-none">
+        <div className="flex gap-2 flex-wrap justify-start md:justify-end items-center max-w-full">
           <span className="text-[10px] opacity-50 hidden sm:inline">autosave ✓ {autosaveTick}</span>
           <button title="Undo (Ctrl+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={undo}>↶</button>
           <button title="Redo (Ctrl+Shift+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={redo}>↷</button>
@@ -614,7 +620,7 @@ function Builder() {
               {activeSkill && (
                 <>
                   <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-3 items-end">
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] gap-3 items-start">
                       <div>
                         <Label>Move Name</Label>
                         <input value={activeSkill.name}
@@ -628,8 +634,10 @@ function Builder() {
                           className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-sm">
                           {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
                         </select>
+                        <p className="mt-1 text-[10px] leading-snug opacity-60">{ANIM_TYPES.find((a) => a.id === activeSkill.anim)?.desc}</p>
                       </div>
                     </div>
+                    <AttackTypePreview skill={activeSkill} t={previewT} />
                   </section>
 
                   <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
@@ -759,9 +767,12 @@ function Builder() {
                     skill={activeSkill}
                     previewT={previewT}
                     playing={playing}
+                    loopPreview={loopPreview}
                     soundNames={soundNames}
                     onPlaySound={playSoundPreview}
                     onPlayToggle={() => setPlaying((p) => !p)}
+                    onLoopToggle={() => setLoopPreview((p) => !p)}
+                    onRestart={() => { setPreviewT(0); lastSoundTRef.current = -1; setPlaying(true); }}
                     onScrub={(t) => { setPlaying(false); setPreviewT(t); lastSoundTRef.current = t; }}
                     onChange={(timeline) => updateSkill((s) => ({ ...s, timeline }))}
                   />
