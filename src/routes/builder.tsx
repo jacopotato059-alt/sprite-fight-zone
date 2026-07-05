@@ -901,9 +901,10 @@ function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
 function DummyFigure({ x, y, color, label, glow }: { x: number; y: number; color: string; label: string; glow?: string }) {
   return (
     <div className="absolute" style={{ left: `${x}%`, top: y, transform: "translate(-50%,-100%)", width: 36, height: 72, filter: glow ? `drop-shadow(0 0 12px ${glow})` : undefined }}>
-      <div className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full" style={{ width: 20, height: 20, background: color, border: "2px solid #0a0a0a" }} />
-      <div className="absolute left-1/2 top-20 -translate-x-1/2" style={{ width: 18, height: 30, background: color, border: "2px solid #0a0a0a", borderRadius: 4 }} />
-      <div className="absolute left-1/2 top-48 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap">{label}</div>
+      <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: 0, width: 20, height: 20, background: color, border: "2px solid #0a0a0a" }} />
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 22, width: 18, height: 30, background: color, border: "2px solid #0a0a0a", borderRadius: 4 }} />
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 50, width: 26, height: 18, borderLeft: `5px solid ${color}`, borderRight: `5px solid ${color}` }} />
+      <div className="absolute left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap" style={{ top: 70 }}>{label}</div>
     </div>
   );
 }
@@ -938,7 +939,7 @@ function TimelineEditor({
       t: 0.5, kind,
       payload: kind === "spawn-fx" ? skill.effect : kind === "sound" ? skill.sound : undefined,
       intensity: 1,
-        layer: activeLayer === "all" ? "base" : activeLayer,
+      layer: activeLayer === "all" ? "base" : activeLayer,
     };
     onChange([...skill.timeline, kf].sort((a, b) => a.t - b.t));
   };
