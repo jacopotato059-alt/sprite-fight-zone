@@ -38,13 +38,15 @@ type EffectPreset =
   | "slash" | "ring" | "spark" | "flame" | "lightning"
   | "shock" | "smoke" | "burst" | "trail" | "shockwave"
   | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice"
-  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers";
+  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers"
+  | "neon" | "laser" | "portal" | "meteor" | "bloom" | "glyph" | "afterimage" | "pixel";
 
 type Keyframe = {
   t: number;
   kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop";
   payload?: string;
   intensity?: number;
+  layer?: string;
 };
 
 type Skill = {
@@ -80,6 +82,7 @@ const EFFECT_PRESETS: EffectPreset[] = [
   "shock", "smoke", "burst", "trail", "shockwave",
   "blackflash", "crimson", "petals", "vortex", "stars", "ice",
   "nova", "blackhole", "chains", "geyser", "runes", "feathers",
+  "neon", "laser", "portal", "meteor", "bloom", "glyph", "afterimage", "pixel",
 ];
 
 const BUILTIN_SOUNDS: Record<string, string> = {
@@ -102,13 +105,13 @@ const PASSIVES = [
   { id: "reservoir", label: "Cursed Reservoir (combo empower)" },
 ];
 
-const ANIM_TYPES: { id: AnimType; label: string }[] = [
-  { id: "melee", label: "Melee Strike" },
-  { id: "dash", label: "Dash Attack" },
-  { id: "projectile", label: "Projectile" },
-  { id: "aoe", label: "AOE Burst" },
-  { id: "buff", label: "Self Buff" },
-  { id: "heal", label: "Heal" },
+const ANIM_TYPES: { id: AnimType; label: string; desc: string }[] = [
+  { id: "melee", label: "Melee Strike", desc: "Step in, strike at close range, then recover. Best for combo hits and knockback." },
+  { id: "dash", label: "Dash Attack", desc: "Launches the fighter forward before impact. Best as a combo starter or gap-closer." },
+  { id: "projectile", label: "Projectile", desc: "Spawns a traveling attack using your projectile speed, range, color, effect, and sound." },
+  { id: "aoe", label: "AOE Burst", desc: "Creates a radius hit around the fighter or target zone. Good for crowd control and stun." },
+  { id: "buff", label: "Self Buff", desc: "Plays effects on the fighter and temporarily powers them up in the arena." },
+  { id: "heal", label: "Heal", desc: "Restores HP and plays a recovery effect around the fighter." },
 ];
 
 const ATTACK_TEMPLATES: (Omit<Skill, "id"> & { blurb: string; preview: EffectPreset[] })[] = [
