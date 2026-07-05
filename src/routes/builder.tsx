@@ -847,6 +847,67 @@ const KIND_COLORS: Record<Keyframe["kind"], string> = {
   screenshake: "#f97316", hitstop: "#e11d48",
 };
 
+const KEYFRAME_DESCRIPTIONS: Record<Keyframe["kind"], string> = {
+  startup: "Anticipation frames before the attack becomes dangerous.",
+  active: "The move is visually active; use this to hold a pose or beam window.",
+  recovery: "End lag after the move; longer recovery makes whiffs easier to punish.",
+  "spawn-fx": "Adds a visual effect layer at this exact moment.",
+  "spawn-projectile": "Launches the authored projectile effect in projectile skills.",
+  damage: "Main hit timing. In the arena this controls when melee damage checks feel active.",
+  sound: "Plays a built-in or uploaded custom sound at this timestamp.",
+  screenshake: "Adds camera shake in-game and a punchier preview beat.",
+  hitstop: "Adds a freeze-frame impact feel for heavy attacks.",
+};
+
+function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
+  const ease = 1 - Math.pow(1 - Math.min(1, t), 3);
+  const attackerX =
+    skill.anim === "projectile" ? 28 :
+    skill.anim === "aoe" ? 38 :
+    skill.anim === "buff" || skill.anim === "heal" ? 34 :
+    28 + ease * (skill.anim === "dash" ? 46 : 26);
+  const projX = 40 + ease * 48;
+  const activeFx = skill.timeline.filter((k) => Math.abs(k.t - t) < 0.09 && (k.kind === "spawn-fx" || k.kind === "spawn-projectile" || k.kind === "damage"));
+  return (
+    <div className="mt-3 rounded overflow-hidden relative" style={{ height: 150, background: "linear-gradient(180deg,#090914,#14101e)", border: "1px solid #24243a" }}>
+      <div className="absolute inset-x-0 bottom-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
+      <div className="absolute top-2 left-3 text-[10px] uppercase tracking-widest opacity-55">Attack Type Preview</div>
+      <DummyFigure x={attackerX} y={92} color="#d8d8d8" label="dummy" glow={skill.anim === "buff" || skill.anim === "heal" ? skill.color : undefined} />
+      <DummyFigure x={80} y={92} color="#ef4444" label="target" />
+      {(skill.anim === "projectile" || activeFx.some((k) => k.kind === "spawn-projectile")) && (
+        <div className="absolute" style={{ left: `${projX}%`, top: 58, width: 58, height: 58, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
+      {(skill.anim === "aoe" || activeFx.length > 0) && activeFx.slice(0, 5).map((k, i) => (
+        <div key={i} className="absolute" style={{ left: `${skill.anim === "aoe" ? 50 + i * 5 : 68}%`, top: 62, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={(k.payload as EffectPreset) || skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      ))}
+      {(skill.anim === "melee" || skill.anim === "dash") && (
+        <div className="absolute" style={{ left: `${54 + ease * 18}%`, top: 62, width: 72, height: 72, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={0.9} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
+      <div className="absolute bottom-2 left-3 right-3 grid grid-cols-3 gap-2 text-[10px] opacity-70">
+        <span>{ANIM_TYPES.find((a) => a.id === skill.anim)?.label}</span>
+        <span>{skill.damage} dmg · {skill.hits ?? 1} hit</span>
+        <span className="text-right">{skill.cooldown}s cd</span>
+      </div>
+    </div>
+  );
+}
+
+function DummyFigure({ x, y, color, label, glow }: { x: number; y: number; color: string; label: string; glow?: string }) {
+  return (
+    <div className="absolute" style={{ left: `${x}%`, top: y, transform: "translate(-50%,-100%)", width: 36, height: 72, filter: glow ? `drop-shadow(0 0 12px ${glow})` : undefined }}>
+      <div className="absolute left-1/2 top-0 -translate-x-1/2 rounded-full" style={{ width: 20, height: 20, background: color, border: "2px solid #0a0a0a" }} />
+      <div className="absolute left-1/2 top-20 -translate-x-1/2" style={{ width: 18, height: 30, background: color, border: "2px solid #0a0a0a", borderRadius: 4 }} />
+      <div className="absolute left-1/2 top-48 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap">{label}</div>
+    </div>
+  );
+}
+
 function TimelineEditor({
   skill, previewT, playing, loopPreview, soundNames, onPlayToggle, onLoopToggle, onRestart, onScrub, onChange, onPlaySound,
 }: {
