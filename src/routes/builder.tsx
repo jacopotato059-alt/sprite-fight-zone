@@ -38,13 +38,15 @@ type EffectPreset =
   | "slash" | "ring" | "spark" | "flame" | "lightning"
   | "shock" | "smoke" | "burst" | "trail" | "shockwave"
   | "blackflash" | "crimson" | "petals" | "vortex" | "stars" | "ice"
-  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers";
+  | "nova" | "blackhole" | "chains" | "geyser" | "runes" | "feathers"
+  | "neon" | "laser" | "portal" | "meteor" | "bloom" | "glyph" | "afterimage" | "pixel";
 
 type Keyframe = {
   t: number;
   kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop";
   payload?: string;
   intensity?: number;
+  layer?: string;
 };
 
 type Skill = {
@@ -80,6 +82,7 @@ const EFFECT_PRESETS: EffectPreset[] = [
   "shock", "smoke", "burst", "trail", "shockwave",
   "blackflash", "crimson", "petals", "vortex", "stars", "ice",
   "nova", "blackhole", "chains", "geyser", "runes", "feathers",
+  "neon", "laser", "portal", "meteor", "bloom", "glyph", "afterimage", "pixel",
 ];
 
 const BUILTIN_SOUNDS: Record<string, string> = {
@@ -102,13 +105,13 @@ const PASSIVES = [
   { id: "reservoir", label: "Cursed Reservoir (combo empower)" },
 ];
 
-const ANIM_TYPES: { id: AnimType; label: string }[] = [
-  { id: "melee", label: "Melee Strike" },
-  { id: "dash", label: "Dash Attack" },
-  { id: "projectile", label: "Projectile" },
-  { id: "aoe", label: "AOE Burst" },
-  { id: "buff", label: "Self Buff" },
-  { id: "heal", label: "Heal" },
+const ANIM_TYPES: { id: AnimType; label: string; desc: string }[] = [
+  { id: "melee", label: "Melee Strike", desc: "Step in, strike at close range, then recover. Best for combo hits and knockback." },
+  { id: "dash", label: "Dash Attack", desc: "Launches the fighter forward before impact. Best as a combo starter or gap-closer." },
+  { id: "projectile", label: "Projectile", desc: "Spawns a traveling attack using your projectile speed, range, color, effect, and sound." },
+  { id: "aoe", label: "AOE Burst", desc: "Creates a radius hit around the fighter or target zone. Good for crowd control and stun." },
+  { id: "buff", label: "Self Buff", desc: "Plays effects on the fighter and temporarily powers them up in the arena." },
+  { id: "heal", label: "Heal", desc: "Restores HP and plays a recovery effect around the fighter." },
 ];
 
 const ATTACK_TEMPLATES: (Omit<Skill, "id"> & { blurb: string; preview: EffectPreset[] })[] = [
@@ -268,6 +271,7 @@ function Builder() {
   const soundFileRef = useRef<HTMLInputElement>(null);
   const [previewT, setPreviewT] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [loopPreview, setLoopPreview] = useState(true);
   const lastSoundTRef = useRef<number>(-1);
 
   useEffect(() => {
@@ -464,21 +468,26 @@ function Builder() {
               playSoundPreview(k.payload ?? activeSkill.sound);
             }
           }
-          lastSoundTRef.current = nt >= 1 ? -1 : nt;
-          return nt >= 1 ? 0 : nt;
+          if (nt >= 1) {
+            lastSoundTRef.current = -1;
+            if (!loopPreview) setPlaying(false);
+            return loopPreview ? 0 : 1;
+          }
+          lastSoundTRef.current = nt;
+          return nt;
         });
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, activeSkill, playSoundPreview]);
+  }, [playing, activeSkill, playSoundPreview, loopPreview]);
 
   // ---- Render ----
   return (
     <div
       ref={scrollRef}
-      className="h-screen w-full overflow-y-auto text-white"
+      className="h-screen w-full overflow-y-auto overflow-x-hidden text-white"
       style={{
         background:
           "radial-gradient(1200px 600px at 20% -10%, #2b1750 0%, transparent 60%), radial-gradient(1000px 500px at 110% 110%, #0c2a3a 0%, transparent 55%), #0a0a12",
@@ -486,7 +495,7 @@ function Builder() {
       }}
     >
       <FxKeyframes />
-      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
+      <header className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
         style={{ borderColor: "#1d1d2a", background: "rgba(10,10,18,0.85)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <Link to="/" className="px-3 py-1.5 rounded text-xs tracking-widest shrink-0"
@@ -496,7 +505,7 @@ function Builder() {
             <div className="text-base sm:text-xl font-bold tracking-wider truncate">Fighter & Skill Builder</div>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end items-center max-w-[56vw] sm:max-w-none">
+        <div className="flex gap-2 flex-wrap justify-start md:justify-end items-center max-w-full">
           <span className="text-[10px] opacity-50 hidden sm:inline">autosave ✓ {autosaveTick}</span>
           <button title="Undo (Ctrl+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={undo}>↶</button>
           <button title="Redo (Ctrl+Shift+Z)" className="px-2 py-2 text-xs rounded" style={btnStyle("#222232")} onClick={redo}>↷</button>
@@ -611,7 +620,7 @@ function Builder() {
               {activeSkill && (
                 <>
                   <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-3 items-end">
+                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] gap-3 items-start">
                       <div>
                         <Label>Move Name</Label>
                         <input value={activeSkill.name}
@@ -625,8 +634,10 @@ function Builder() {
                           className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-sm">
                           {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
                         </select>
+                        <p className="mt-1 text-[10px] leading-snug opacity-60">{ANIM_TYPES.find((a) => a.id === activeSkill.anim)?.desc}</p>
                       </div>
                     </div>
+                    <AttackTypePreview skill={activeSkill} t={previewT} />
                   </section>
 
                   <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
@@ -756,9 +767,12 @@ function Builder() {
                     skill={activeSkill}
                     previewT={previewT}
                     playing={playing}
+                    loopPreview={loopPreview}
                     soundNames={soundNames}
                     onPlaySound={playSoundPreview}
                     onPlayToggle={() => setPlaying((p) => !p)}
+                    onLoopToggle={() => setLoopPreview((p) => !p)}
+                    onRestart={() => { setPreviewT(0); lastSoundTRef.current = -1; setPlaying(true); }}
                     onScrub={(t) => { setPlaying(false); setPreviewT(t); lastSoundTRef.current = t; }}
                     onChange={(timeline) => updateSkill((s) => ({ ...s, timeline }))}
                   />
@@ -833,41 +847,116 @@ const KIND_COLORS: Record<Keyframe["kind"], string> = {
   screenshake: "#f97316", hitstop: "#e11d48",
 };
 
+const KEYFRAME_DESCRIPTIONS: Record<Keyframe["kind"], string> = {
+  startup: "Anticipation frames before the attack becomes dangerous.",
+  active: "The move is visually active; use this to hold a pose or beam window.",
+  recovery: "End lag after the move; longer recovery makes whiffs easier to punish.",
+  "spawn-fx": "Adds a visual effect layer at this exact moment.",
+  "spawn-projectile": "Launches the authored projectile effect in projectile skills.",
+  damage: "Main hit timing. In the arena this controls when melee damage checks feel active.",
+  sound: "Plays a built-in or uploaded custom sound at this timestamp.",
+  screenshake: "Adds camera shake in-game and a punchier preview beat.",
+  hitstop: "Adds a freeze-frame impact feel for heavy attacks.",
+};
+
+function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
+  const ease = 1 - Math.pow(1 - Math.min(1, t), 3);
+  const attackerX =
+    skill.anim === "projectile" ? 28 :
+    skill.anim === "aoe" ? 38 :
+    skill.anim === "buff" || skill.anim === "heal" ? 34 :
+    28 + ease * (skill.anim === "dash" ? 46 : 26);
+  const projX = 40 + ease * 48;
+  const activeFx = skill.timeline.filter((k) => Math.abs(k.t - t) < 0.09 && (k.kind === "spawn-fx" || k.kind === "spawn-projectile" || k.kind === "damage"));
+  return (
+    <div className="mt-3 rounded overflow-hidden relative" style={{ height: 150, background: "linear-gradient(180deg,#090914,#14101e)", border: "1px solid #24243a" }}>
+      <div className="absolute inset-x-0 bottom-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
+      <div className="absolute top-2 left-3 text-[10px] uppercase tracking-widest opacity-55">Attack Type Preview</div>
+      <DummyFigure x={attackerX} y={92} color="#d8d8d8" label="dummy" glow={skill.anim === "buff" || skill.anim === "heal" ? skill.color : undefined} />
+      <DummyFigure x={80} y={92} color="#ef4444" label="target" />
+      {(skill.anim === "projectile" || activeFx.some((k) => k.kind === "spawn-projectile")) && (
+        <div className="absolute" style={{ left: `${projX}%`, top: 58, width: 58, height: 58, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
+      {(skill.anim === "aoe" || activeFx.length > 0) && activeFx.slice(0, 5).map((k, i) => (
+        <div key={i} className="absolute" style={{ left: `${skill.anim === "aoe" ? 50 + i * 5 : 68}%`, top: 62, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={(k.payload as EffectPreset) || skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      ))}
+      {(skill.anim === "melee" || skill.anim === "dash") && (
+        <div className="absolute" style={{ left: `${54 + ease * 18}%`, top: 62, width: 72, height: 72, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={0.9} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
+      <div className="absolute bottom-2 left-3 right-3 grid grid-cols-3 gap-2 text-[10px] opacity-70">
+        <span>{ANIM_TYPES.find((a) => a.id === skill.anim)?.label}</span>
+        <span>{skill.damage} dmg · {skill.hits ?? 1} hit</span>
+        <span className="text-right">{skill.cooldown}s cd</span>
+      </div>
+    </div>
+  );
+}
+
+function DummyFigure({ x, y, color, label, glow }: { x: number; y: number; color: string; label: string; glow?: string }) {
+  return (
+    <div className="absolute" style={{ left: `${x}%`, top: y, transform: "translate(-50%,-100%)", width: 36, height: 72, filter: glow ? `drop-shadow(0 0 12px ${glow})` : undefined }}>
+      <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: 0, width: 20, height: 20, background: color, border: "2px solid #0a0a0a" }} />
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 22, width: 18, height: 30, background: color, border: "2px solid #0a0a0a", borderRadius: 4 }} />
+      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 50, width: 26, height: 18, borderLeft: `5px solid ${color}`, borderRight: `5px solid ${color}` }} />
+      <div className="absolute left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap" style={{ top: 70 }}>{label}</div>
+    </div>
+  );
+}
+
 function TimelineEditor({
-  skill, previewT, playing, soundNames, onPlayToggle, onScrub, onChange, onPlaySound,
+  skill, previewT, playing, loopPreview, soundNames, onPlayToggle, onLoopToggle, onRestart, onScrub, onChange, onPlaySound,
 }: {
-  skill: Skill; previewT: number; playing: boolean;
+  skill: Skill; previewT: number; playing: boolean; loopPreview: boolean;
   soundNames: string[];
   onPlayToggle: () => void;
+  onLoopToggle: () => void;
+  onRestart: () => void;
   onScrub: (t: number) => void;
   onChange: (timeline: Keyframe[]) => void;
   onPlaySound: (name: string) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [popoverIdx, setPopoverIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [activeLayer, setActiveLayer] = useState<string>("all");
   const dragStartRef = useRef<{ x: number; t: number; moved: boolean } | null>(null);
+  const layers = useMemo(() => {
+    const names = Array.from(new Set(skill.timeline.map((k) => k.layer ?? "base")));
+    return ["all", ...names];
+  }, [skill.timeline]);
+  const visibleTimeline = skill.timeline
+    .map((k, i) => ({ k, i }))
+    .filter(({ k }) => activeLayer === "all" || (k.layer ?? "base") === activeLayer);
 
   const addKeyframe = (kind: Keyframe["kind"]) => {
     const kf: Keyframe = {
       t: 0.5, kind,
       payload: kind === "spawn-fx" ? skill.effect : kind === "sound" ? skill.sound : undefined,
       intensity: 1,
+      layer: activeLayer === "all" ? "base" : activeLayer,
     };
     onChange([...skill.timeline, kf].sort((a, b) => a.t - b.t));
   };
   const addLayer = () => {
     // Add 3 staggered spawn-fx layers around mid-skill to make compound effects easy
-    const layers: Keyframe[] = [
-      { t: 0.32, kind: "spawn-fx", payload: skill.effect, intensity: 1 },
-      { t: 0.4, kind: "spawn-fx", payload: "ring", intensity: 0.8 },
-      { t: 0.48, kind: "spawn-fx", payload: "spark", intensity: 0.9 },
+    const layerName = `layer ${layers.filter((l) => l !== "all").length + 1}`;
+    const newLayer: Keyframe[] = [
+      { t: 0.32, kind: "spawn-fx", payload: skill.effect, intensity: 1, layer: layerName },
+      { t: 0.4, kind: "spawn-fx", payload: "ring", intensity: 0.8, layer: layerName },
+      { t: 0.48, kind: "spawn-fx", payload: "spark", intensity: 0.9, layer: layerName },
     ];
-    onChange([...skill.timeline, ...layers].sort((a, b) => a.t - b.t));
+    setActiveLayer(layerName);
+    onChange([...skill.timeline, ...newLayer].sort((a, b) => a.t - b.t));
   };
   const removeKeyframe = (idx: number) => {
     onChange(skill.timeline.filter((_, i) => i !== idx));
-    setPopoverIdx(null);
+    setSelectedIdx(null);
   };
   const updateKf = (idx: number, patch: Partial<Keyframe>) =>
     onChange(skill.timeline.map((k, i) => (i === idx ? { ...k, ...patch } : k)));
@@ -888,7 +977,7 @@ function TimelineEditor({
     const onUp = () => {
       const start = dragStartRef.current;
       if (start && !start.moved) {
-        setPopoverIdx(dragIdx);
+        setSelectedIdx(dragIdx);
       }
       setDragIdx(null);
       dragStartRef.current = null;
@@ -910,140 +999,180 @@ function TimelineEditor({
     if (!rect) return;
     const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     onScrub(t);
-    setPopoverIdx(null);
   };
 
-  const popKf = popoverIdx !== null ? skill.timeline[popoverIdx] : null;
+  const selectedKf = selectedIdx !== null ? skill.timeline[selectedIdx] : null;
+  const selectedDesc = selectedKf ? KEYFRAME_DESCRIPTIONS[selectedKf.kind] : "Select a marker or layer row to edit timing, payload, and intensity.";
 
   return (
     <div className="mt-2 mb-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <Label>Skill Timeline ({skill.duration.toFixed(1)}s) — click a marker to edit</Label>
-        <div className="flex gap-1 flex-wrap">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div>
+          <Label>Dynamic Skill Timeline ({skill.duration.toFixed(1)}s)</Label>
+          <p className="text-[10px] opacity-60 leading-snug">Layers work like art layers: switch rows to isolate FX, then select a marker to edit it in the inspector.</p>
+        </div>
+        <div className="flex gap-1 flex-wrap justify-end">
+          <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={onRestart}>↺ REPLAY</button>
           <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#16213e")} onClick={onPlayToggle}>
             {playing ? "❚❚ PAUSE" : "▶ PLAY"}
+          </button>
+          <button className="text-[10px] px-2 py-1 rounded" style={btnStyle(loopPreview ? "#1c3a2a" : "#3a2a1c")} onClick={onLoopToggle}>
+            {loopPreview ? "LOOP ON" : "ONE PLAY"}
           </button>
           <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3b2469")} onClick={addLayer} title="Add a compound 3-layer FX burst">
             + LAYER
           </button>
-          {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound", "screenshake", "hitstop"] as Keyframe["kind"][]).map((k) => (
-            <button key={k} className="text-[10px] px-2 py-1 rounded"
-              style={{ background: KIND_COLORS[k], color: "#000", border: "none" }}
-              onClick={() => addKeyframe(k)}>+ {k}</button>
-          ))}
         </div>
       </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(0,1fr)_280px] gap-3">
+        <div className="rounded p-2" style={{ background: "#0d0d14", border: "1px solid #22222c" }}>
+          <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Layers</div>
+          <div className="flex xl:flex-col gap-1 overflow-x-auto xl:overflow-visible pb-1 xl:pb-0">
+            {layers.map((layer) => {
+              const count = layer === "all" ? skill.timeline.length : skill.timeline.filter((k) => (k.layer ?? "base") === layer).length;
+              return (
+                <button key={layer} type="button" onClick={() => setActiveLayer(layer)}
+                  className="shrink-0 xl:w-full text-left px-2 py-1.5 rounded text-[11px]"
+                  style={{ background: activeLayer === layer ? "#2b1f4a" : "#15151f", border: `1px solid ${activeLayer === layer ? "#7a55d6" : "#2a2a3a"}` }}>
+                  <span className="font-bold">{layer === "all" ? "All layers" : layer}</span>
+                  <span className="opacity-55"> · {count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid grid-cols-2 xl:grid-cols-1 gap-1">
+            {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound", "screenshake", "hitstop"] as Keyframe["kind"][]).map((k) => (
+              <button key={k} className="text-[10px] px-2 py-1 rounded text-left"
+                title={KEYFRAME_DESCRIPTIONS[k]}
+                style={{ background: KIND_COLORS[k], color: "#000", border: "none" }}
+                onClick={() => addKeyframe(k)}>+ {k}</button>
+            ))}
+          </div>
+        </div>
 
-      <div
-        ref={trackRef}
-        onPointerDown={onTrackClick}
-        className="relative h-16 rounded select-none touch-none"
-        style={{
-          background: "repeating-linear-gradient(90deg, #11111a 0, #11111a 9.5%, #1a1a26 10%)",
-          border: "1px solid #2a2a3a",
-        }}
-      >
-        <div className="absolute top-0 bottom-0 w-px bg-white pointer-events-none"
-          style={{ left: `${previewT * 100}%`, boxShadow: "0 0 4px #fff" }} />
-        {skill.timeline.map((k, i) => (
-          <div key={i}
-            onPointerDown={(e) => {
-              e.stopPropagation(); e.preventDefault();
-              dragStartRef.current = { x: e.clientX, t: k.t, moved: false };
-              setDragIdx(i);
+        <div className="min-w-0">
+          <div
+            ref={trackRef}
+            onPointerDown={onTrackClick}
+            className="relative h-28 rounded select-none touch-none overflow-hidden"
+            style={{
+              background: "repeating-linear-gradient(90deg, #11111a 0, #11111a 9.5%, #1a1a26 10%)",
+              border: "1px solid #2a2a3a",
+              boxShadow: "inset 0 0 28px rgba(122,85,214,0.08)",
             }}
-            onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
-            title={`${k.kind} @ ${(k.t * skill.duration).toFixed(2)}s — click to edit, drag to retime, double-click to remove`}
-            className="absolute top-1 w-4 h-14 rounded-sm cursor-grab touch-none"
-            style={{
-              left: `calc(${k.t * 100}% - 8px)`,
-              background: KIND_COLORS[k.kind],
-              boxShadow: dragIdx === i || popoverIdx === i ? `0 0 10px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
-              border: popoverIdx === i ? "1px solid #fff" : dragIdx === i ? "1px solid #fff" : "none",
-            }} />
-        ))}
+          >
+            {[0, 0.25, 0.5, 0.75, 1].map((tick) => (
+              <div key={tick} className="absolute top-0 bottom-0 border-l border-white/10" style={{ left: `${tick * 100}%` }}>
+                <span className="absolute top-1 left-1 text-[9px] opacity-45">{(tick * skill.duration).toFixed(1)}s</span>
+              </div>
+            ))}
+            <div className="absolute top-0 bottom-0 w-px bg-white pointer-events-none z-10"
+              style={{ left: `${previewT * 100}%`, boxShadow: "0 0 8px #fff" }} />
+            {visibleTimeline.map(({ k, i }, row) => (
+              <div key={i}
+                onPointerDown={(e) => {
+                  e.stopPropagation(); e.preventDefault();
+                  dragStartRef.current = { x: e.clientX, t: k.t, moved: false };
+                  setDragIdx(i);
+                }}
+                onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
+                title={`${k.kind} — ${KEYFRAME_DESCRIPTIONS[k.kind]}`}
+                className="absolute w-5 rounded-sm cursor-grab touch-none"
+                style={{
+                  left: `calc(${k.t * 100}% - 10px)`,
+                  top: 22 + (row % 3) * 25,
+                  height: 20,
+                  background: KIND_COLORS[k.kind],
+                  boxShadow: dragIdx === i || selectedIdx === i ? `0 0 14px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
+                  border: selectedIdx === i || dragIdx === i ? "1px solid #fff" : "none",
+                }}>
+                <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 text-[8px] text-white/60 whitespace-nowrap">{k.kind.replace("spawn-", "")}</span>
+              </div>
+            ))}
+          </div>
 
-        {/* Popover */}
-        {popKf && popoverIdx !== null && (
-          <div className="absolute z-20 p-3 rounded shadow-lg"
-            style={{
-              top: "calc(100% + 8px)",
-              left: `clamp(0px, calc(${popKf.t * 100}% - 130px), calc(100% - 260px))`,
-              width: 260, background: "#0d0d14", border: "1px solid #3a3a52",
-              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-            }}>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+            {visibleTimeline.map(({ k, i }) => (
+              <button key={i} type="button" className="p-2 rounded text-xs cursor-pointer text-left" style={{ background: selectedIdx === i ? "#1d1530" : "#11111a", border: `1px solid ${selectedIdx === i ? "#5b3fa3" : "#22222c"}` }}
+                onClick={() => setSelectedIdx(i)}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[k.kind], color: "#000" }}>
+                    {k.kind}
+                  </span>
+                  <span className="text-[10px] opacity-50">{k.layer ?? "base"}</span>
+                </div>
+                <div className="text-[10px] mb-1">{(k.t * skill.duration).toFixed(2)}s · {(k.intensity ?? 1).toFixed(1)}x</div>
+                <div className="h-1 rounded" style={{ background: "#0a0a10" }}>
+                  <div className="h-full rounded" style={{ width: `${k.t * 100}%`, background: KIND_COLORS[k.kind] }} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded p-3 min-h-[280px]" style={{ background: "#0d0d14", border: "1px solid #22222c" }}>
+          <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Keyframe Inspector</div>
+          <p className="text-[10px] opacity-60 leading-snug mb-3">{selectedDesc}</p>
+          {selectedKf && selectedIdx !== null ? (
+            <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[popKf.kind], color: "#000" }}>
-                {popKf.kind}
+              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[selectedKf.kind], color: "#000" }}>
+                {selectedKf.kind}
               </span>
-              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setPopoverIdx(null)}>✕</button>
+              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setSelectedIdx(null)}>✕</button>
             </div>
             <Label>Kind</Label>
-            <select value={popKf.kind}
-              onChange={(e) => updateKf(popoverIdx, { kind: e.target.value as Keyframe["kind"] })}
+            <select value={selectedKf.kind}
+              onChange={(e) => updateKf(selectedIdx, { kind: e.target.value as Keyframe["kind"] })}
               className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
               {(Object.keys(KIND_COLORS) as Keyframe["kind"][]).map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
-            <Label>Time ({(popKf.t * skill.duration).toFixed(2)}s)</Label>
-            <input type="range" min={0} max={1} step={0.01} value={popKf.t}
-              onChange={(e) => updateKf(popoverIdx, { t: Number(e.target.value) })}
+            <Label>Layer</Label>
+            <input value={selectedKf.layer ?? "base"}
+              onChange={(e) => updateKf(selectedIdx, { layer: e.target.value || "base" })}
+              className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2" />
+            <Label>Time ({(selectedKf.t * skill.duration).toFixed(2)}s)</Label>
+            <input type="range" min={0} max={1} step={0.01} value={selectedKf.t}
+              onChange={(e) => updateKf(selectedIdx, { t: Number(e.target.value) })}
               className="w-full accent-purple-400 mb-2" />
-            <Label>Intensity ({(popKf.intensity ?? 1).toFixed(2)})</Label>
-            <input type="range" min={0.1} max={2} step={0.05} value={popKf.intensity ?? 1}
-              onChange={(e) => updateKf(popoverIdx, { intensity: Number(e.target.value) })}
+            <Label>Intensity ({(selectedKf.intensity ?? 1).toFixed(2)})</Label>
+            <input type="range" min={0.1} max={3} step={0.05} value={selectedKf.intensity ?? 1}
+              onChange={(e) => updateKf(selectedIdx, { intensity: Number(e.target.value) })}
               className="w-full accent-purple-400 mb-2" />
-            {(popKf.kind === "spawn-fx" || popKf.kind === "spawn-projectile") && (
+            {(selectedKf.kind === "spawn-fx" || selectedKf.kind === "spawn-projectile") && (
               <>
                 <Label>Effect Preset</Label>
-                <select value={popKf.payload ?? ""}
-                  onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                <select value={selectedKf.payload ?? ""}
+                  onChange={(e) => updateKf(selectedIdx, { payload: e.target.value })}
                   className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
                   {EFFECT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
                 <div className="relative h-16 rounded overflow-hidden" style={{ background: "#08080c", border: "1px solid #22222c" }}>
-                  <FxBlob preset={(popKf.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={popKf.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+                  <FxBlob preset={(selectedKf.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={selectedKf.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
                 </div>
               </>
             )}
-            {popKf.kind === "sound" && (
+            {selectedKf.kind === "sound" && (
               <>
                 <Label>Sound</Label>
                 <div className="flex items-center gap-1">
-                  <select value={popKf.payload ?? ""}
-                    onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                  <select value={selectedKf.payload ?? ""}
+                    onChange={(e) => updateKf(selectedIdx, { payload: e.target.value })}
                     className="flex-1 min-w-0 bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs">
                     {soundNames.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
-                  <button onClick={() => onPlaySound(popKf.payload ?? "")}
+                  <button onClick={() => onPlaySound(selectedKf.payload ?? "")}
                     className="text-[10px] px-1.5 py-1 rounded" style={btnStyle("#1c3a2a")}>▶</button>
                 </div>
               </>
             )}
             <div className="flex justify-between mt-3">
-              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3a1f1f")} onClick={() => removeKeyframe(popoverIdx)}>DELETE</button>
-              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={() => setPopoverIdx(null)}>DONE</button>
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3a1f1f")} onClick={() => removeKeyframe(selectedIdx)}>DELETE</button>
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={() => setSelectedIdx(null)}>DONE</button>
             </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-        {skill.timeline.map((k, i) => (
-          <div key={i} className="p-2 rounded text-xs cursor-pointer" style={{ background: popoverIdx === i ? "#1d1530" : "#11111a", border: `1px solid ${popoverIdx === i ? "#5b3fa3" : "#22222c"}` }}
-            onClick={() => setPopoverIdx(i)}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[k.kind], color: "#000" }}>
-                {k.kind}
-              </span>
-              <button className="text-[10px] opacity-60 hover:opacity-100" onClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}>✕</button>
             </div>
-            <div className="text-[10px] mb-1">t = {(k.t * skill.duration).toFixed(2)}s · ✎ click to edit</div>
-            <input type="range" min={0} max={1} step={0.01} value={k.t}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => updateKf(i, { t: Number(e.target.value) })}
-              className="w-full accent-purple-400" />
-          </div>
-        ))}
+          ) : <div className="text-xs opacity-50">No marker selected.</div>}
+        </div>
       </div>
     </div>
   );
@@ -1051,16 +1180,25 @@ function TimelineEditor({
 
 function PreviewPane({ skill, t }: { skill: Skill; t: number }) {
   const active = skill.timeline.filter((k) => Math.abs(k.t - t) < 0.08 && (k.kind === "spawn-fx" || k.kind === "active" || k.kind === "damage"));
+  const attackerX = 22 + (skill.anim === "dash" ? 36 * t : skill.anim === "melee" ? 18 * t : 0);
+  const projectileX = 38 + 44 * t;
   return (
     <div className="mt-3 rounded relative overflow-hidden"
-      style={{ height: 180, background: "linear-gradient(180deg,#0c0c14,#15101f)", border: "1px solid #1f1f2c" }}>
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="w-14 h-14 rounded-full" style={{ background: "#2a2a3a", border: "2px solid #44445a", boxShadow: "inset 0 0 12px rgba(0,0,0,0.6)" }} />
-      </div>
+      style={{ height: 220, background: "radial-gradient(500px 140px at 50% 45%, rgba(122,85,214,0.18), transparent 60%), linear-gradient(180deg,#0c0c14,#15101f)", border: "1px solid #1f1f2c" }}>
+      <div className="absolute inset-x-0 bottom-8 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
+      <DummyFigure x={attackerX} y={154} color="#d8d8d8" label="caster" />
+      <DummyFigure x={78} y={154} color="#ef4444" label="enemy" />
+      {skill.anim === "projectile" && (
+        <div className="absolute" style={{ left: `${projectileX}%`, top: 92, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
+          <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
       {(active.length === 0
-        ? [<FxBlob key="idle" preset={skill.effect} color={skill.color} intensity={0.6} playing fxSpeed={skill.fxSpeed ?? 1} />]
+        ? [<div key="idle" className="absolute" style={{ left: "58%", top: 92, width: 80, height: 80 }}><FxBlob preset={skill.effect} color={skill.color} intensity={0.55} playing fxSpeed={skill.fxSpeed ?? 1} /></div>]
         : active.map((k, i) => (
-            <FxBlob key={i} preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+            <div key={i} className="absolute" style={{ left: `${58 + i * 6}%`, top: 92, width: 90, height: 90 }}>
+              <FxBlob preset={(k.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+            </div>
           ))
       )}
       <div className="absolute bottom-1 left-2 text-[10px] opacity-60">
@@ -1089,6 +1227,10 @@ function FxKeyframes() {
       @keyframes fx-star-twinkle { 0%,100%{opacity:0.2;transform:translate(-50%,-50%) rotate(var(--a)) translate(var(--r),0) scale(0.5)} 50%{opacity:1;transform:translate(-50%,-50%) rotate(var(--a)) translate(var(--r),0) scale(1)} }
       @keyframes fx-lightning-flash { 0%,100%{opacity:0.3;filter:drop-shadow(0 0 0 currentColor)} 50%{opacity:1;filter:drop-shadow(0 0 12px currentColor)} }
       @keyframes fx-ice-grow { 0%{transform:translate(-50%,-50%) scale(0.3) rotate(var(--a));opacity:0} 60%{opacity:1} 100%{transform:translate(-50%,-50%) scale(1.1) rotate(var(--a));opacity:0.6} }
+      @keyframes fx-neon-scan { 0%{transform:translate(-140%,-50%) skewX(-18deg);opacity:0} 40%{opacity:1} 100%{transform:translate(70%,-50%) skewX(-18deg);opacity:0} }
+      @keyframes fx-portal-open { 0%{transform:translate(-50%,-50%) rotate(0deg) scale(0.2);opacity:0} 35%{opacity:1} 100%{transform:translate(-50%,-50%) rotate(360deg) scale(1.35);opacity:0.25} }
+      @keyframes fx-meteor-drop { 0%{transform:translate(-120%,-180%) rotate(-35deg);opacity:0} 30%{opacity:1} 100%{transform:translate(40%,40%) rotate(-35deg);opacity:0} }
+      @keyframes fx-pixel-pop { 0%{transform:translate(-50%,-50%) scale(0.2);opacity:0} 25%{opacity:1} 100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1);opacity:0} }
     `}</style>
   );
 }
@@ -1448,6 +1590,84 @@ function FxBlob({ preset, color, intensity, playing, fxSpeed = 1 }: { preset: Ef
             } as React.CSSProperties} />
           );
         })}
+      </>
+    );
+  }
+
+  if (preset === "neon" || preset === "laser") {
+    const beams = preset === "laser" ? 5 : 3;
+    return (
+      <>
+        {Array.from({ length: beams }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: size * (2.2 + i * 0.25), height: preset === "laser" ? 4 : 9,
+            top: `${42 + i * 7}%`, borderRadius: 8,
+            background: `linear-gradient(90deg, transparent, #fff, ${color}, transparent)`,
+            boxShadow: `0 0 12px ${color}, 0 0 24px ${color}`,
+            animation: `fx-neon-scan ${0.55 + i * 0.08}s ${i * 0.06}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        <div style={{ ...common, width: size * 1.2, height: size * 1.2, borderRadius: "50%", border: `1px solid ${color}`, boxShadow: `0 0 18px ${color}, inset 0 0 14px ${color}`, opacity: 0.55 }} />
+      </>
+    );
+  }
+
+  if (preset === "portal" || preset === "glyph") {
+    return (
+      <>
+        {[0, 1, 2].map((i) => (
+          <div key={i} style={{
+            ...common, width: size * (1.1 + i * 0.38), height: size * (1.1 + i * 0.38),
+            borderRadius: preset === "glyph" && i === 1 ? 8 : "50%",
+            border: `${2 - i * 0.3}px ${i === 2 ? "dashed" : "solid"} ${color}`,
+            boxShadow: `0 0 14px ${color}`, opacity: 0.85 - i * 0.18,
+            animation: `fx-portal-open ${1 + i * 0.25}s ${i * 0.08}s infinite ease-out${anim}`,
+          }} />
+        ))}
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={`g${i}`} style={{
+            ...common, width: 8, height: 8, borderRadius: 2, background: color,
+            ["--a" as never]: `${(i / 7) * 360}deg`, ["--r" as never]: `${size * 0.62}px`,
+            animation: `fx-star-twinkle 1.25s ${i * 0.07}s infinite ease-in-out${anim}`,
+          } as React.CSSProperties} />
+        ))}
+      </>
+    );
+  }
+
+  if (preset === "meteor" || preset === "afterimage") {
+    return (
+      <>
+        {Array.from({ length: preset === "meteor" ? 6 : 9 }).map((_, i) => (
+          <div key={i} style={{
+            ...common, width: size * (preset === "meteor" ? 1.1 : 1.6), height: preset === "meteor" ? 9 : 5,
+            top: `${35 + i * 5}%`, opacity: 0.8 - i * 0.05,
+            background: `linear-gradient(90deg, transparent, ${color}, #fff)`,
+            boxShadow: `0 0 14px ${color}`,
+            animation: `fx-meteor-drop ${0.55 + i * 0.06}s ${i * 0.06}s infinite ease-in${anim}`,
+          }} />
+        ))}
+      </>
+    );
+  }
+
+  if (preset === "bloom" || preset === "pixel") {
+    const count = preset === "pixel" ? 18 : 12;
+    return (
+      <>
+        {Array.from({ length: count }).map((_, i) => {
+          const ang = (i / count) * Math.PI * 2;
+          const dist = 22 + (i % 4) * 9;
+          return <div key={i} style={{
+            ...common, width: preset === "pixel" ? 7 : 10, height: preset === "pixel" ? 7 : 10,
+            borderRadius: preset === "pixel" ? 0 : "50%",
+            background: i % 3 === 0 ? "#fff" : color,
+            boxShadow: `0 0 10px ${color}`,
+            ["--dx" as never]: `${Math.cos(ang) * dist}px`, ["--dy" as never]: `${Math.sin(ang) * dist}px`,
+            animation: `fx-pixel-pop ${0.75 + (i % 3) * 0.1}s ${i * 0.035}s infinite ease-out${anim}`,
+          } as React.CSSProperties} />;
+        })}
+        <div style={{ ...common, width: size, height: size, borderRadius: "50%", background: `radial-gradient(circle, ${color}, transparent 70%)`, filter: "blur(8px)", opacity: 0.7 }} />
       </>
     );
   }

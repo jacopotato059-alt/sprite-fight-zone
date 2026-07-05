@@ -57,6 +57,28 @@ const SOUNDS = {
   electric: sndElectric.url,
 };
 
+const BUILDER_SOUND_MAP: Record<string, string> = {
+  "punch-hit": SOUNDS.punchHit,
+  "punch-lunge": SOUNDS.punchLunge,
+  "knife-slash": SOUNDS.knife,
+  pistol: SOUNDS.pistol,
+  "throw-swing": SOUNDS.throwSwing,
+  "black-flash": SOUNDS.blackFlash,
+  "divergent-hit": SOUNDS.divergent,
+  "finishing-hit": SOUNDS.finishingHit,
+  "detroit-smash": SOUNDS.detroitSmash,
+  electricity: SOUNDS.electric,
+  sandevistan: SOUNDS.sande,
+  "dismantle-1": SOUNDS.dismantle1,
+  "dismantle-2": SOUNDS.dismantle2,
+  "crack-the-whip": SOUNDS.crackWhip,
+  spawn: SOUNDS.spawn,
+  damage: SOUNDS.damage,
+  taunt: SOUNDS.taunt,
+  angry: SOUNDS.angry,
+  chuckle: SOUNDS.chuckle,
+};
+
 function playSound(url: string, volume = 0.6): HTMLAudioElement | null {
   try {
     const a = new Audio(url);
@@ -127,7 +149,7 @@ type FighterTypeId = "dummy" | "david" | "yuji" | "deku";
 
 
 interface AbilityDef { name: string; damage: number; type: "melee" | "ranged" | "status"; cooldown: number; customSkillIndex?: number; }
-interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; }
+interface CustomTimelineKeyframe { t: number; kind: "startup" | "active" | "recovery" | "spawn-fx" | "spawn-projectile" | "damage" | "sound" | "screenshake" | "hitstop"; payload?: string; intensity?: number; layer?: string; }
 interface CustomSkillMeta { id?: string; name: string; damage: number; cooldown: number; anim: string; range?: number; projSpeed?: number; duration?: number; effect?: string; color?: string; sound?: string; passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number; hits?: number; knockback?: number; lifesteal?: number; stun?: number; }
 interface FighterDef {
   id: FighterTypeId; name: string; sprite: string;
@@ -309,6 +331,7 @@ type CustomSkillInstall = {
   name: string; damage: number; cooldown: number; anim: string;
   range?: number; projSpeed?: number; duration?: number;
   effect?: string; color?: string; sound?: string;
+  passive?: string; timeline?: CustomTimelineKeyframe[]; fxSpeed?: number;
   hits?: number; knockback?: number; lifesteal?: number; stun?: number;
 };
 type CustomFighterInstall = {
@@ -328,6 +351,8 @@ const EFFECT_MAP: Record<string, Effect["kind"]> = {
   smoke: "wallspark", trail: "wallspark", feathers: "wallspark",
   petals: "megaring", stars: "megaring", runes: "megaring",
   ice: "bluefire",
+  neon: "electric", laser: "cut", portal: "megaring", meteor: "greenfire",
+  bloom: "counterburst", glyph: "megaring", afterimage: "wallspark", pixel: "counterburst",
 };
 
 function loadInstalledFighters(): CustomFighterInstall[] {
@@ -372,6 +397,48 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
       custom: { melee: meleeSkill, ranged: rangedSkill, skills: c.skills },
     };
   }
+}
+
+function CustomProjectileView({ p }: { p: Projectile }) {
+  const color = p.customSkill?.color ?? "#9be0ff";
+  const effect = p.customSkill?.effect ?? "spark";
+  const dir = Math.sign(p.vx) || 1;
+  const base = {
+    left: p.x - 18,
+    top: p.y - 18,
+    width: 36,
+    height: 36,
+    mixBlendMode: "screen" as const,
+    transform: `scaleX(${dir})`,
+  };
+  if (effect === "slash" || effect === "laser" || effect === "trail" || effect === "afterimage") {
+    return <div className="absolute pointer-events-none" style={{ ...base, width: 76, height: 12, left: p.x - 38, top: p.y - 6, borderRadius: 8, background: `linear-gradient(90deg, transparent, #fff, ${color}, transparent)`, boxShadow: `0 0 16px ${color}`, transform: `scaleX(${dir}) skewX(-24deg)` }} />;
+  }
+  if (effect === "lightning" || effect === "shock" || effect === "neon") {
+    return (
+      <div className="absolute pointer-events-none" style={{ ...base, filter: `drop-shadow(0 0 10px ${color})` }}>
+        <svg viewBox="0 0 36 36" width="36" height="36">
+          <path d="M18 1 L27 14 L18 13 L25 35 L7 17 L17 18 Z" fill={color} stroke="#fff" strokeWidth="1.2" />
+        </svg>
+      </div>
+    );
+  }
+  if (effect === "blackhole" || effect === "portal" || effect === "vortex" || effect === "glyph") {
+    return <div className="absolute pointer-events-none" style={{ ...base, borderRadius: "50%", background: `radial-gradient(circle, #000 0 28%, ${color} 32% 46%, transparent 68%)`, border: `2px dashed ${color}`, boxShadow: `0 0 18px ${color}, inset 0 0 14px ${color}`, animation: "spin 0.7s linear infinite" }} />;
+  }
+  if (effect === "meteor" || effect === "flame" || effect === "geyser") {
+    return <div className="absolute pointer-events-none" style={{ ...base, width: 62, height: 22, left: p.x - 31, top: p.y - 11, borderRadius: "50%", background: `radial-gradient(ellipse at 70% 50%, #fff, ${color} 35%, transparent 72%)`, boxShadow: `0 0 18px ${color}`, transform: `scaleX(${dir}) rotate(-18deg)` }} />;
+  }
+  if (effect === "pixel") {
+    return (
+      <div className="absolute pointer-events-none" style={{ ...base }}>
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="absolute" style={{ left: (i % 3) * 12, top: Math.floor(i / 3) * 12, width: 8, height: 8, background: i === 4 ? "#fff" : color, boxShadow: `0 0 8px ${color}` }} />
+        ))}
+      </div>
+    );
+  }
+  return <div className="absolute pointer-events-none" style={{ ...base, borderRadius: "50%", background: `radial-gradient(circle, #fff 0%, ${color} 42%, transparent 75%)`, border: "1px solid rgba(255,255,255,0.8)", boxShadow: `0 0 14px ${color}, 0 0 28px ${color}66` }} />;
 }
 
 function Game() {
@@ -491,22 +558,23 @@ function Game() {
     playSound(SOUNDS.click, 0.5);
   }, []);
 
-  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5) => {
+  const spawnEffect = (kind: Effect["kind"], x: number, y: number, life = 0.5, color?: string, intensity = 1) => {
     effectsRef.current.push({
       uid: nextUid(), kind, x, y,
-      life, maxLife: life, seed: Math.random() * 1000,
+      life, maxLife: life, seed: Math.random() * 1000, color, intensity,
     });
+    if (effectsRef.current.length > 120) effectsRef.current.splice(0, effectsRef.current.length - 120);
   };
 
   const spawnCustomEffect = (meta: CustomSkillMeta | undefined, x: number, y: number, fallback: Effect["kind"] = "counterburst", intensity = 1) => {
     const key = meta?.effect ?? "";
     const kind: Effect["kind"] = key ? (EFFECT_MAP[key] ?? fallback) : fallback;
     const life = Math.max(0.25, Math.min(1.2, (meta?.duration ?? 0.6) * 0.75)) * Math.max(0.65, Math.min(1.8, intensity));
-    spawnEffect(kind, x, y, life);
+    spawnEffect(kind, x, y, life, meta?.color, intensity);
     const rich = meta?.timeline?.filter((k) => k.kind === "spawn-fx") ?? [];
     for (const k of rich.slice(0, 4)) {
       const layerKind = k.payload ? (EFFECT_MAP[k.payload] ?? kind) : kind;
-      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1));
+      spawnEffect(layerKind, x + (Math.random() - 0.5) * 34, y + (Math.random() - 0.5) * 28, life * (k.intensity ?? 1), meta?.color, k.intensity ?? intensity);
     }
     if (meta?.timeline?.some((k) => k.kind === "screenshake")) shakeRef.current = Math.max(shakeRef.current, 0.28 * intensity);
     if (meta?.timeline?.some((k) => k.kind === "hitstop")) hitstopRef.current = Math.max(hitstopRef.current, 0.08 * intensity);
@@ -514,7 +582,7 @@ function Game() {
 
   const playCustomSkillSound = (meta?: CustomSkillMeta, fallback = SOUNDS.punchHit) => {
     const sound = meta?.timeline?.find((k) => k.kind === "sound")?.payload ?? meta?.sound;
-    const url = sound ? (customSoundsRef.current[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
+    const url = sound ? (customSoundsRef.current[sound] ?? BUILDER_SOUND_MAP[sound] ?? (SOUNDS as Record<string, string>)[sound] ?? fallback) : fallback;
     playSound(url, 0.72);
   };
 
@@ -532,6 +600,7 @@ function Game() {
     if (anim === "projectile") {
       f.state = "throw"; f.stateTimer = Math.max(0.2, Math.min(0.75, meta.duration ?? 0.35));
       const speed = Math.max(120, meta.projSpeed ?? PROJECTILE_SPEED);
+      const projectileFx = meta.timeline?.find((k) => k.kind === "spawn-projectile")?.payload;
       const targetY = enemy ? enemy.y - FIGHTERS[enemy.type].height * 0.55 : f.y - def.height * 0.55;
       const muzzleY = f.y - def.height * 0.55;
       const dist = enemy ? Math.max(80, Math.abs(enemy.x - f.x)) : 300;
@@ -540,7 +609,7 @@ function Game() {
         x: f.x + dir * 30, y: muzzleY,
         vx: dir * speed, vy: (targetY - muzzleY) / Math.max(0.12, dist / speed),
         damage: meta.damage ?? ability.damage, ttl: Math.max(0.7, (meta.range ?? 650) / speed),
-        customSkill: meta,
+        customSkill: projectileFx ? { ...meta, effect: projectileFx } : meta,
       });
       spawnCustomEffect(meta, f.x + dir * 30, muzzleY, "wallspark", 0.8);
       playCustomSkillSound(meta, SOUNDS.throwSwing);
@@ -2459,18 +2528,7 @@ function Game() {
                 borderRadius: 4,
               }} />
           ) : p.kind === "custom" ? (
-            <div key={p.uid} className="absolute pointer-events-none"
-              style={{
-                left: p.x - 16, top: p.y - 16, width: 32, height: 32,
-                borderRadius: p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? 3 : "50%",
-                background: p.customSkill?.color
-                  ? `radial-gradient(circle, #fff 0%, ${p.customSkill.color} 42%, transparent 75%)`
-                  : "radial-gradient(circle, #fff 0%, #9be0ff 55%, transparent 78%)",
-                border: "1px solid rgba(255,255,255,0.8)",
-                boxShadow: `0 0 14px ${p.customSkill?.color ?? "#9be0ff"}`,
-                transform: `scaleX(${Math.sign(p.vx) || 1}) ${p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? "skewX(-22deg) scaleX(1.8)" : ""}`,
-                mixBlendMode: "screen",
-              }} />
+            <CustomProjectileView key={p.uid} p={p} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
               style={{
