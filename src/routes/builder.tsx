@@ -848,40 +848,53 @@ const KIND_COLORS: Record<Keyframe["kind"], string> = {
 };
 
 function TimelineEditor({
-  skill, previewT, playing, soundNames, onPlayToggle, onScrub, onChange, onPlaySound,
+  skill, previewT, playing, loopPreview, soundNames, onPlayToggle, onLoopToggle, onRestart, onScrub, onChange, onPlaySound,
 }: {
-  skill: Skill; previewT: number; playing: boolean;
+  skill: Skill; previewT: number; playing: boolean; loopPreview: boolean;
   soundNames: string[];
   onPlayToggle: () => void;
+  onLoopToggle: () => void;
+  onRestart: () => void;
   onScrub: (t: number) => void;
   onChange: (timeline: Keyframe[]) => void;
   onPlaySound: (name: string) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [popoverIdx, setPopoverIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [activeLayer, setActiveLayer] = useState<string>("all");
   const dragStartRef = useRef<{ x: number; t: number; moved: boolean } | null>(null);
+  const layers = useMemo(() => {
+    const names = Array.from(new Set(skill.timeline.map((k) => k.layer ?? "base")));
+    return ["all", ...names];
+  }, [skill.timeline]);
+  const visibleTimeline = skill.timeline
+    .map((k, i) => ({ k, i }))
+    .filter(({ k }) => activeLayer === "all" || (k.layer ?? "base") === activeLayer);
 
   const addKeyframe = (kind: Keyframe["kind"]) => {
     const kf: Keyframe = {
       t: 0.5, kind,
       payload: kind === "spawn-fx" ? skill.effect : kind === "sound" ? skill.sound : undefined,
       intensity: 1,
+        layer: activeLayer === "all" ? "base" : activeLayer,
     };
     onChange([...skill.timeline, kf].sort((a, b) => a.t - b.t));
   };
   const addLayer = () => {
     // Add 3 staggered spawn-fx layers around mid-skill to make compound effects easy
-    const layers: Keyframe[] = [
-      { t: 0.32, kind: "spawn-fx", payload: skill.effect, intensity: 1 },
-      { t: 0.4, kind: "spawn-fx", payload: "ring", intensity: 0.8 },
-      { t: 0.48, kind: "spawn-fx", payload: "spark", intensity: 0.9 },
+    const layerName = `layer ${layers.filter((l) => l !== "all").length + 1}`;
+    const newLayer: Keyframe[] = [
+      { t: 0.32, kind: "spawn-fx", payload: skill.effect, intensity: 1, layer: layerName },
+      { t: 0.4, kind: "spawn-fx", payload: "ring", intensity: 0.8, layer: layerName },
+      { t: 0.48, kind: "spawn-fx", payload: "spark", intensity: 0.9, layer: layerName },
     ];
-    onChange([...skill.timeline, ...layers].sort((a, b) => a.t - b.t));
+    setActiveLayer(layerName);
+    onChange([...skill.timeline, ...newLayer].sort((a, b) => a.t - b.t));
   };
   const removeKeyframe = (idx: number) => {
     onChange(skill.timeline.filter((_, i) => i !== idx));
-    setPopoverIdx(null);
+    setSelectedIdx(null);
   };
   const updateKf = (idx: number, patch: Partial<Keyframe>) =>
     onChange(skill.timeline.map((k, i) => (i === idx ? { ...k, ...patch } : k)));
@@ -902,7 +915,7 @@ function TimelineEditor({
     const onUp = () => {
       const start = dragStartRef.current;
       if (start && !start.moved) {
-        setPopoverIdx(dragIdx);
+        setSelectedIdx(dragIdx);
       }
       setDragIdx(null);
       dragStartRef.current = null;
@@ -924,140 +937,180 @@ function TimelineEditor({
     if (!rect) return;
     const t = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     onScrub(t);
-    setPopoverIdx(null);
   };
 
-  const popKf = popoverIdx !== null ? skill.timeline[popoverIdx] : null;
+  const selectedKf = selectedIdx !== null ? skill.timeline[selectedIdx] : null;
+  const selectedDesc = selectedKf ? KEYFRAME_DESCRIPTIONS[selectedKf.kind] : "Select a marker or layer row to edit timing, payload, and intensity.";
 
   return (
     <div className="mt-2 mb-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <Label>Skill Timeline ({skill.duration.toFixed(1)}s) — click a marker to edit</Label>
-        <div className="flex gap-1 flex-wrap">
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <div>
+          <Label>Dynamic Skill Timeline ({skill.duration.toFixed(1)}s)</Label>
+          <p className="text-[10px] opacity-60 leading-snug">Layers work like art layers: switch rows to isolate FX, then select a marker to edit it in the inspector.</p>
+        </div>
+        <div className="flex gap-1 flex-wrap justify-end">
+          <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={onRestart}>↺ REPLAY</button>
           <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#16213e")} onClick={onPlayToggle}>
             {playing ? "❚❚ PAUSE" : "▶ PLAY"}
+          </button>
+          <button className="text-[10px] px-2 py-1 rounded" style={btnStyle(loopPreview ? "#1c3a2a" : "#3a2a1c")} onClick={onLoopToggle}>
+            {loopPreview ? "LOOP ON" : "ONE PLAY"}
           </button>
           <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3b2469")} onClick={addLayer} title="Add a compound 3-layer FX burst">
             + LAYER
           </button>
-          {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound", "screenshake", "hitstop"] as Keyframe["kind"][]).map((k) => (
-            <button key={k} className="text-[10px] px-2 py-1 rounded"
-              style={{ background: KIND_COLORS[k], color: "#000", border: "none" }}
-              onClick={() => addKeyframe(k)}>+ {k}</button>
-          ))}
         </div>
       </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(0,1fr)_280px] gap-3">
+        <div className="rounded p-2" style={{ background: "#0d0d14", border: "1px solid #22222c" }}>
+          <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Layers</div>
+          <div className="flex xl:flex-col gap-1 overflow-x-auto xl:overflow-visible pb-1 xl:pb-0">
+            {layers.map((layer) => {
+              const count = layer === "all" ? skill.timeline.length : skill.timeline.filter((k) => (k.layer ?? "base") === layer).length;
+              return (
+                <button key={layer} type="button" onClick={() => setActiveLayer(layer)}
+                  className="shrink-0 xl:w-full text-left px-2 py-1.5 rounded text-[11px]"
+                  style={{ background: activeLayer === layer ? "#2b1f4a" : "#15151f", border: `1px solid ${activeLayer === layer ? "#7a55d6" : "#2a2a3a"}` }}>
+                  <span className="font-bold">{layer === "all" ? "All layers" : layer}</span>
+                  <span className="opacity-55"> · {count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid grid-cols-2 xl:grid-cols-1 gap-1">
+            {(["startup", "active", "recovery", "spawn-fx", "spawn-projectile", "damage", "sound", "screenshake", "hitstop"] as Keyframe["kind"][]).map((k) => (
+              <button key={k} className="text-[10px] px-2 py-1 rounded text-left"
+                title={KEYFRAME_DESCRIPTIONS[k]}
+                style={{ background: KIND_COLORS[k], color: "#000", border: "none" }}
+                onClick={() => addKeyframe(k)}>+ {k}</button>
+            ))}
+          </div>
+        </div>
 
-      <div
-        ref={trackRef}
-        onPointerDown={onTrackClick}
-        className="relative h-16 rounded select-none touch-none"
-        style={{
-          background: "repeating-linear-gradient(90deg, #11111a 0, #11111a 9.5%, #1a1a26 10%)",
-          border: "1px solid #2a2a3a",
-        }}
-      >
-        <div className="absolute top-0 bottom-0 w-px bg-white pointer-events-none"
-          style={{ left: `${previewT * 100}%`, boxShadow: "0 0 4px #fff" }} />
-        {skill.timeline.map((k, i) => (
-          <div key={i}
-            onPointerDown={(e) => {
-              e.stopPropagation(); e.preventDefault();
-              dragStartRef.current = { x: e.clientX, t: k.t, moved: false };
-              setDragIdx(i);
+        <div className="min-w-0">
+          <div
+            ref={trackRef}
+            onPointerDown={onTrackClick}
+            className="relative h-28 rounded select-none touch-none overflow-hidden"
+            style={{
+              background: "repeating-linear-gradient(90deg, #11111a 0, #11111a 9.5%, #1a1a26 10%)",
+              border: "1px solid #2a2a3a",
+              boxShadow: "inset 0 0 28px rgba(122,85,214,0.08)",
             }}
-            onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
-            title={`${k.kind} @ ${(k.t * skill.duration).toFixed(2)}s — click to edit, drag to retime, double-click to remove`}
-            className="absolute top-1 w-4 h-14 rounded-sm cursor-grab touch-none"
-            style={{
-              left: `calc(${k.t * 100}% - 8px)`,
-              background: KIND_COLORS[k.kind],
-              boxShadow: dragIdx === i || popoverIdx === i ? `0 0 10px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
-              border: popoverIdx === i ? "1px solid #fff" : dragIdx === i ? "1px solid #fff" : "none",
-            }} />
-        ))}
+          >
+            {[0, 0.25, 0.5, 0.75, 1].map((tick) => (
+              <div key={tick} className="absolute top-0 bottom-0 border-l border-white/10" style={{ left: `${tick * 100}%` }}>
+                <span className="absolute top-1 left-1 text-[9px] opacity-45">{(tick * skill.duration).toFixed(1)}s</span>
+              </div>
+            ))}
+            <div className="absolute top-0 bottom-0 w-px bg-white pointer-events-none z-10"
+              style={{ left: `${previewT * 100}%`, boxShadow: "0 0 8px #fff" }} />
+            {visibleTimeline.map(({ k, i }, row) => (
+              <div key={i}
+                onPointerDown={(e) => {
+                  e.stopPropagation(); e.preventDefault();
+                  dragStartRef.current = { x: e.clientX, t: k.t, moved: false };
+                  setDragIdx(i);
+                }}
+                onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
+                title={`${k.kind} — ${KEYFRAME_DESCRIPTIONS[k.kind]}`}
+                className="absolute w-5 rounded-sm cursor-grab touch-none"
+                style={{
+                  left: `calc(${k.t * 100}% - 10px)`,
+                  top: 22 + (row % 3) * 25,
+                  height: 20,
+                  background: KIND_COLORS[k.kind],
+                  boxShadow: dragIdx === i || selectedIdx === i ? `0 0 14px ${KIND_COLORS[k.kind]}` : "0 0 6px rgba(0,0,0,0.6)",
+                  border: selectedIdx === i || dragIdx === i ? "1px solid #fff" : "none",
+                }}>
+                <span className="absolute left-1/2 top-full mt-0.5 -translate-x-1/2 text-[8px] text-white/60 whitespace-nowrap">{k.kind.replace("spawn-", "")}</span>
+              </div>
+            ))}
+          </div>
 
-        {/* Popover */}
-        {popKf && popoverIdx !== null && (
-          <div className="absolute z-20 p-3 rounded shadow-lg"
-            style={{
-              top: "calc(100% + 8px)",
-              left: `clamp(0px, calc(${popKf.t * 100}% - 130px), calc(100% - 260px))`,
-              width: 260, background: "#0d0d14", border: "1px solid #3a3a52",
-              boxShadow: "0 12px 30px rgba(0,0,0,0.6)",
-            }}>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+            {visibleTimeline.map(({ k, i }) => (
+              <button key={i} type="button" className="p-2 rounded text-xs cursor-pointer text-left" style={{ background: selectedIdx === i ? "#1d1530" : "#11111a", border: `1px solid ${selectedIdx === i ? "#5b3fa3" : "#22222c"}` }}
+                onClick={() => setSelectedIdx(i)}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[k.kind], color: "#000" }}>
+                    {k.kind}
+                  </span>
+                  <span className="text-[10px] opacity-50">{k.layer ?? "base"}</span>
+                </div>
+                <div className="text-[10px] mb-1">{(k.t * skill.duration).toFixed(2)}s · {(k.intensity ?? 1).toFixed(1)}x</div>
+                <div className="h-1 rounded" style={{ background: "#0a0a10" }}>
+                  <div className="h-full rounded" style={{ width: `${k.t * 100}%`, background: KIND_COLORS[k.kind] }} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded p-3 min-h-[280px]" style={{ background: "#0d0d14", border: "1px solid #22222c" }}>
+          <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Keyframe Inspector</div>
+          <p className="text-[10px] opacity-60 leading-snug mb-3">{selectedDesc}</p>
+          {selectedKf && selectedIdx !== null ? (
+            <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[popKf.kind], color: "#000" }}>
-                {popKf.kind}
+              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[selectedKf.kind], color: "#000" }}>
+                {selectedKf.kind}
               </span>
-              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setPopoverIdx(null)}>✕</button>
+              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setSelectedIdx(null)}>✕</button>
             </div>
             <Label>Kind</Label>
-            <select value={popKf.kind}
-              onChange={(e) => updateKf(popoverIdx, { kind: e.target.value as Keyframe["kind"] })}
+            <select value={selectedKf.kind}
+              onChange={(e) => updateKf(selectedIdx, { kind: e.target.value as Keyframe["kind"] })}
               className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
               {(Object.keys(KIND_COLORS) as Keyframe["kind"][]).map((k) => <option key={k} value={k}>{k}</option>)}
             </select>
-            <Label>Time ({(popKf.t * skill.duration).toFixed(2)}s)</Label>
-            <input type="range" min={0} max={1} step={0.01} value={popKf.t}
-              onChange={(e) => updateKf(popoverIdx, { t: Number(e.target.value) })}
+            <Label>Layer</Label>
+            <input value={selectedKf.layer ?? "base"}
+              onChange={(e) => updateKf(selectedIdx, { layer: e.target.value || "base" })}
+              className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2" />
+            <Label>Time ({(selectedKf.t * skill.duration).toFixed(2)}s)</Label>
+            <input type="range" min={0} max={1} step={0.01} value={selectedKf.t}
+              onChange={(e) => updateKf(selectedIdx, { t: Number(e.target.value) })}
               className="w-full accent-purple-400 mb-2" />
-            <Label>Intensity ({(popKf.intensity ?? 1).toFixed(2)})</Label>
-            <input type="range" min={0.1} max={2} step={0.05} value={popKf.intensity ?? 1}
-              onChange={(e) => updateKf(popoverIdx, { intensity: Number(e.target.value) })}
+            <Label>Intensity ({(selectedKf.intensity ?? 1).toFixed(2)})</Label>
+            <input type="range" min={0.1} max={3} step={0.05} value={selectedKf.intensity ?? 1}
+              onChange={(e) => updateKf(selectedIdx, { intensity: Number(e.target.value) })}
               className="w-full accent-purple-400 mb-2" />
-            {(popKf.kind === "spawn-fx" || popKf.kind === "spawn-projectile") && (
+            {(selectedKf.kind === "spawn-fx" || selectedKf.kind === "spawn-projectile") && (
               <>
                 <Label>Effect Preset</Label>
-                <select value={popKf.payload ?? ""}
-                  onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                <select value={selectedKf.payload ?? ""}
+                  onChange={(e) => updateKf(selectedIdx, { payload: e.target.value })}
                   className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs mb-2">
                   {EFFECT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
                 <div className="relative h-16 rounded overflow-hidden" style={{ background: "#08080c", border: "1px solid #22222c" }}>
-                  <FxBlob preset={(popKf.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={popKf.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
+                  <FxBlob preset={(selectedKf.payload as EffectPreset) ?? skill.effect} color={skill.color} intensity={selectedKf.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
                 </div>
               </>
             )}
-            {popKf.kind === "sound" && (
+            {selectedKf.kind === "sound" && (
               <>
                 <Label>Sound</Label>
                 <div className="flex items-center gap-1">
-                  <select value={popKf.payload ?? ""}
-                    onChange={(e) => updateKf(popoverIdx, { payload: e.target.value })}
+                  <select value={selectedKf.payload ?? ""}
+                    onChange={(e) => updateKf(selectedIdx, { payload: e.target.value })}
                     className="flex-1 min-w-0 bg-[#15151f] border border-[#2a2a3a] rounded px-1.5 py-1 text-xs">
                     {soundNames.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
-                  <button onClick={() => onPlaySound(popKf.payload ?? "")}
+                  <button onClick={() => onPlaySound(selectedKf.payload ?? "")}
                     className="text-[10px] px-1.5 py-1 rounded" style={btnStyle("#1c3a2a")}>▶</button>
                 </div>
               </>
             )}
             <div className="flex justify-between mt-3">
-              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3a1f1f")} onClick={() => removeKeyframe(popoverIdx)}>DELETE</button>
-              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={() => setPopoverIdx(null)}>DONE</button>
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#3a1f1f")} onClick={() => removeKeyframe(selectedIdx)}>DELETE</button>
+              <button className="text-[10px] px-2 py-1 rounded" style={btnStyle("#1f2937")} onClick={() => setSelectedIdx(null)}>DONE</button>
             </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-        {skill.timeline.map((k, i) => (
-          <div key={i} className="p-2 rounded text-xs cursor-pointer" style={{ background: popoverIdx === i ? "#1d1530" : "#11111a", border: `1px solid ${popoverIdx === i ? "#5b3fa3" : "#22222c"}` }}
-            onClick={() => setPopoverIdx(i)}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[k.kind], color: "#000" }}>
-                {k.kind}
-              </span>
-              <button className="text-[10px] opacity-60 hover:opacity-100" onClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}>✕</button>
             </div>
-            <div className="text-[10px] mb-1">t = {(k.t * skill.duration).toFixed(2)}s · ✎ click to edit</div>
-            <input type="range" min={0} max={1} step={0.01} value={k.t}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => updateKf(i, { t: Number(e.target.value) })}
-              className="w-full accent-purple-400" />
-          </div>
-        ))}
+          ) : <div className="text-xs opacity-50">No marker selected.</div>}
+        </div>
       </div>
     </div>
   );
