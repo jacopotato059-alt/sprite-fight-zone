@@ -399,6 +399,48 @@ function registerCustomFighters(list: CustomFighterInstall[]) {
   }
 }
 
+function CustomProjectileView({ p }: { p: Projectile }) {
+  const color = p.customSkill?.color ?? "#9be0ff";
+  const effect = p.customSkill?.effect ?? "spark";
+  const dir = Math.sign(p.vx) || 1;
+  const base = {
+    left: p.x - 18,
+    top: p.y - 18,
+    width: 36,
+    height: 36,
+    mixBlendMode: "screen" as const,
+    transform: `scaleX(${dir})`,
+  };
+  if (effect === "slash" || effect === "laser" || effect === "trail" || effect === "afterimage") {
+    return <div className="absolute pointer-events-none" style={{ ...base, width: 76, height: 12, left: p.x - 38, top: p.y - 6, borderRadius: 8, background: `linear-gradient(90deg, transparent, #fff, ${color}, transparent)`, boxShadow: `0 0 16px ${color}`, transform: `scaleX(${dir}) skewX(-24deg)` }} />;
+  }
+  if (effect === "lightning" || effect === "shock" || effect === "neon") {
+    return (
+      <div className="absolute pointer-events-none" style={{ ...base, filter: `drop-shadow(0 0 10px ${color})` }}>
+        <svg viewBox="0 0 36 36" width="36" height="36">
+          <path d="M18 1 L27 14 L18 13 L25 35 L7 17 L17 18 Z" fill={color} stroke="#fff" strokeWidth="1.2" />
+        </svg>
+      </div>
+    );
+  }
+  if (effect === "blackhole" || effect === "portal" || effect === "vortex" || effect === "glyph") {
+    return <div className="absolute pointer-events-none" style={{ ...base, borderRadius: "50%", background: `radial-gradient(circle, #000 0 28%, ${color} 32% 46%, transparent 68%)`, border: `2px dashed ${color}`, boxShadow: `0 0 18px ${color}, inset 0 0 14px ${color}`, animation: "spin 0.7s linear infinite" }} />;
+  }
+  if (effect === "meteor" || effect === "flame" || effect === "geyser") {
+    return <div className="absolute pointer-events-none" style={{ ...base, width: 62, height: 22, left: p.x - 31, top: p.y - 11, borderRadius: "50%", background: `radial-gradient(ellipse at 70% 50%, #fff, ${color} 35%, transparent 72%)`, boxShadow: `0 0 18px ${color}`, transform: `scaleX(${dir}) rotate(-18deg)` }} />;
+  }
+  if (effect === "pixel") {
+    return (
+      <div className="absolute pointer-events-none" style={{ ...base }}>
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="absolute" style={{ left: (i % 3) * 12, top: Math.floor(i / 3) * 12, width: 8, height: 8, background: i === 4 ? "#fff" : color, boxShadow: `0 0 8px ${color}` }} />
+        ))}
+      </div>
+    );
+  }
+  return <div className="absolute pointer-events-none" style={{ ...base, borderRadius: "50%", background: `radial-gradient(circle, #fff 0%, ${color} 42%, transparent 75%)`, border: "1px solid rgba(255,255,255,0.8)", boxShadow: `0 0 14px ${color}, 0 0 28px ${color}66` }} />;
+}
+
 function Game() {
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
