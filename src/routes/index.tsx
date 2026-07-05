@@ -2486,18 +2486,7 @@ function Game() {
                 borderRadius: 4,
               }} />
           ) : p.kind === "custom" ? (
-            <div key={p.uid} className="absolute pointer-events-none"
-              style={{
-                left: p.x - 16, top: p.y - 16, width: 32, height: 32,
-                borderRadius: p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? 3 : "50%",
-                background: p.customSkill?.color
-                  ? `radial-gradient(circle, #fff 0%, ${p.customSkill.color} 42%, transparent 75%)`
-                  : "radial-gradient(circle, #fff 0%, #9be0ff 55%, transparent 78%)",
-                border: "1px solid rgba(255,255,255,0.8)",
-                boxShadow: `0 0 14px ${p.customSkill?.color ?? "#9be0ff"}`,
-                transform: `scaleX(${Math.sign(p.vx) || 1}) ${p.customSkill?.effect === "slash" || p.customSkill?.effect === "trail" ? "skewX(-22deg) scaleX(1.8)" : ""}`,
-                mixBlendMode: "screen",
-              }} />
+            <CustomProjectileView key={p.uid} p={p} />
           ) : (
             <div key={p.uid} className="absolute pointer-events-none"
               style={{
