@@ -1148,7 +1148,7 @@ function TimelineEditor({
           <div className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Keyframe Inspector</div>
           <p className="text-[10px] opacity-60 leading-snug mb-3">{selectedDesc}</p>
           {selectedKf && selectedIdx !== null ? (
-            <div>
+            <div key={selectedIdx} className="inspector-in">
             <div className="flex items-center justify-between mb-2">
               <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: KIND_COLORS[selectedKf.kind], color: "#000" }}>
                 {selectedKf.kind}
