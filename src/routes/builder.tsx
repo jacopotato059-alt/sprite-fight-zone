@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dummySprite from "@/assets/dummy.png";
+
 
 import sndClick from "@/assets/sounds/ui-click.mp3.asset.json";
 import sndPunchLunge from "@/assets/sounds/punch-lunge.mp3.asset.json";
