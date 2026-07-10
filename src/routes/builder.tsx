@@ -489,16 +489,13 @@ function Builder() {
   return (
     <div
       ref={scrollRef}
-      className="h-screen w-full overflow-y-auto overflow-x-hidden text-white"
-      style={{
-        background:
-          "radial-gradient(1200px 600px at 20% -10%, #2b1750 0%, transparent 60%), radial-gradient(1000px 500px at 110% 110%, #0c2a3a 0%, transparent 55%), #0a0a12",
-        fontFamily: "Chakra Petch, system-ui, sans-serif",
-      }}
+      className="h-screen w-full overflow-y-auto overflow-x-hidden text-white builder-shell"
+      style={{ fontFamily: "Chakra Petch, system-ui, sans-serif" }}
     >
       <FxKeyframes />
-      <header className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
+      <header className="builder-header grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-3 sm:px-5 py-3 sm:py-4 border-b sticky top-0 z-30 backdrop-blur"
         style={{ borderColor: "#1d1d2a", background: "rgba(10,10,18,0.85)" }}>
+
         <div className="flex items-center gap-3 min-w-0">
           <Link to="/" className="px-3 py-1.5 rounded text-xs tracking-widest shrink-0"
             style={{ background: "#1b1b28", border: "1px solid #2c2c40" }}>← ARENA</Link>
