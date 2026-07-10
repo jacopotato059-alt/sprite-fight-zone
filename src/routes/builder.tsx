@@ -1223,8 +1223,8 @@ function PreviewPane({ skill, t }: { skill: Skill; t: number }) {
     <div className="mt-3 rounded relative overflow-hidden"
       style={{ height: 220, background: "radial-gradient(500px 140px at 50% 45%, rgba(122,85,214,0.18), transparent 60%), linear-gradient(180deg,#0c0c14,#15101f)", border: "1px solid #1f1f2c" }}>
       <div className="absolute inset-x-0 bottom-8 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
-      <DummyFigure x={attackerX} y={154} color="#d8d8d8" label="caster" />
-      <DummyFigure x={78} y={154} color="#ef4444" label="enemy" />
+      <DummyFigure x={attackerX + 22} y={190} label="caster" scale={1.1} glow={skill.color} />
+      <DummyFigure x={78} y={190} label="enemy" red flip scale={1.1} hit={active.some((k) => k.kind === "damage")} lean={active.some((k) => k.kind === "damage") ? -14 : 0} />
       {skill.anim === "projectile" && (
         <div className="absolute" style={{ left: `${projectileX}%`, top: 92, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
           <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
