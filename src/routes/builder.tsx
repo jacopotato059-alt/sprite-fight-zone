@@ -864,31 +864,45 @@ const KEYFRAME_DESCRIPTIONS: Record<Keyframe["kind"], string> = {
 function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
   const ease = 1 - Math.pow(1 - Math.min(1, t), 3);
   const attackerX =
-    skill.anim === "projectile" ? 28 :
-    skill.anim === "aoe" ? 38 :
-    skill.anim === "buff" || skill.anim === "heal" ? 34 :
-    28 + ease * (skill.anim === "dash" ? 46 : 26);
-  const projX = 40 + ease * 48;
+    skill.anim === "projectile" ? 26 :
+    skill.anim === "aoe" ? 34 :
+    skill.anim === "buff" || skill.anim === "heal" ? 32 :
+    26 + ease * (skill.anim === "dash" ? 44 : 22);
+  const projX = 38 + ease * 46;
+  // Predict "impact" moment: when damage keyframe crosses OR when melee reaches target
+  const impactT = skill.timeline.find((k) => k.kind === "damage")?.t
+    ?? (skill.anim === "melee" || skill.anim === "dash" ? 0.55 : skill.anim === "projectile" ? 0.85 : 0.5);
+  const isHit = Math.abs(t - impactT) < 0.08 && t > 0.05;
+  const targetLean = isHit ? (skill.anim === "buff" || skill.anim === "heal" ? 0 : -14) : 0;
+  const attackerLean = (skill.anim === "melee" || skill.anim === "dash") ? (ease * 12 - (isHit ? 0 : 0)) : 0;
   const activeFx = skill.timeline.filter((k) => Math.abs(k.t - t) < 0.09 && (k.kind === "spawn-fx" || k.kind === "spawn-projectile" || k.kind === "damage"));
   return (
-    <div className="mt-3 rounded overflow-hidden relative" style={{ height: 150, background: "linear-gradient(180deg,#090914,#14101e)", border: "1px solid #24243a" }}>
-      <div className="absolute inset-x-0 bottom-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)" }} />
+    <div className="mt-3 rounded overflow-hidden relative" style={{ height: 170, background: "linear-gradient(180deg,#090914 0%,#14101e 70%,#1c1230 100%)", border: "1px solid #24243a" }}>
+      <div className="absolute inset-0 opacity-30" style={{ background: "repeating-linear-gradient(90deg, rgba(122,85,214,0.08) 0 1px, transparent 1px 40px)" }} />
+      <div className="absolute inset-x-0 bottom-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent)" }} />
+      <div className="absolute inset-x-0 bottom-0 h-5" style={{ background: "linear-gradient(180deg, transparent, rgba(122,85,214,0.18))" }} />
       <div className="absolute top-2 left-3 text-[10px] uppercase tracking-widest opacity-55">Attack Type Preview</div>
-      <DummyFigure x={attackerX} y={92} color="#d8d8d8" label="dummy" glow={skill.anim === "buff" || skill.anim === "heal" ? skill.color : undefined} />
-      <DummyFigure x={80} y={92} color="#ef4444" label="target" />
+      <DummyFigure x={attackerX} y={110} label="dummy" scale={0.9} lean={attackerLean}
+        glow={skill.anim === "buff" || skill.anim === "heal" ? skill.color : (skill.anim === "melee" || skill.anim === "dash") ? skill.color : undefined} />
+      <DummyFigure x={78} y={110} label="target" red flip scale={0.9} lean={targetLean} hit={isHit} />
       {(skill.anim === "projectile" || activeFx.some((k) => k.kind === "spawn-projectile")) && (
-        <div className="absolute" style={{ left: `${projX}%`, top: 58, width: 58, height: 58, transform: "translate(-50%,-50%)" }}>
+        <div className="absolute" style={{ left: `${projX}%`, top: 70, width: 58, height: 58, transform: "translate(-50%,-50%)" }}>
           <FxBlob preset={skill.effect} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
         </div>
       )}
       {(skill.anim === "aoe" || activeFx.length > 0) && activeFx.slice(0, 5).map((k, i) => (
-        <div key={i} className="absolute" style={{ left: `${skill.anim === "aoe" ? 50 + i * 5 : 68}%`, top: 62, width: 70, height: 70, transform: "translate(-50%,-50%)" }}>
+        <div key={i} className="absolute" style={{ left: `${skill.anim === "aoe" ? 50 + i * 5 : 68}%`, top: 74, width: 78, height: 78, transform: "translate(-50%,-50%)" }}>
           <FxBlob preset={(k.payload as EffectPreset) || skill.effect} color={skill.color} intensity={k.intensity ?? 1} playing fxSpeed={skill.fxSpeed ?? 1} />
         </div>
       ))}
       {(skill.anim === "melee" || skill.anim === "dash") && (
-        <div className="absolute" style={{ left: `${54 + ease * 18}%`, top: 62, width: 72, height: 72, transform: "translate(-50%,-50%)" }}>
+        <div className="absolute" style={{ left: `${54 + ease * 18}%`, top: 74, width: 78, height: 78, transform: "translate(-50%,-50%)" }}>
           <FxBlob preset={skill.effect} color={skill.color} intensity={0.9} playing fxSpeed={skill.fxSpeed ?? 1} />
+        </div>
+      )}
+      {isHit && (
+        <div className="absolute pointer-events-none" style={{ left: "72%", top: 60, transform: "translate(-50%,-50%)", fontFamily: "Chakra Petch", fontWeight: 900, fontSize: 20, color: "#fff", textShadow: "0 0 8px #ff3a3a, 2px 2px 0 #000", animation: "layer-in 0.35s ease-out" }}>
+          -{Math.max(1, Math.round((skill.damage ?? 10) / (skill.hits ?? 1)))}
         </div>
       )}
       <div className="absolute bottom-2 left-3 right-3 grid grid-cols-3 gap-2 text-[10px] opacity-70">
@@ -899,6 +913,7 @@ function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
     </div>
   );
 }
+
 
 function DummyFigure({ x, y, color, label, glow, hit, lean = 0, flip = false, scale = 1, red = false }: {
   x: number; y: number; color?: string; label: string; glow?: string;
