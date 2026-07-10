@@ -900,16 +900,36 @@ function AttackTypePreview({ skill, t }: { skill: Skill; t: number }) {
   );
 }
 
-function DummyFigure({ x, y, color, label, glow }: { x: number; y: number; color: string; label: string; glow?: string }) {
+function DummyFigure({ x, y, color, label, glow, hit, lean = 0, flip = false, scale = 1, red = false }: {
+  x: number; y: number; color?: string; label: string; glow?: string;
+  hit?: boolean; lean?: number; flip?: boolean; scale?: number; red?: boolean;
+}) {
+  const w = 44 * scale;
+  const h = 80 * scale;
   return (
-    <div className="absolute" style={{ left: `${x}%`, top: y, transform: "translate(-50%,-100%)", width: 36, height: 72, filter: glow ? `drop-shadow(0 0 12px ${glow})` : undefined }}>
-      <div className="absolute left-1/2 -translate-x-1/2 rounded-full" style={{ top: 0, width: 20, height: 20, background: color, border: "2px solid #0a0a0a" }} />
-      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 22, width: 18, height: 30, background: color, border: "2px solid #0a0a0a", borderRadius: 4 }} />
-      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: 50, width: 26, height: 18, borderLeft: `5px solid ${color}`, borderRight: `5px solid ${color}` }} />
-      <div className="absolute left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap" style={{ top: 70 }}>{label}</div>
+    <div className={`absolute ${hit ? "dummy-hit-flash" : ""}`}
+      style={{
+        left: `${x}%`, top: y,
+        transform: `translate(-50%,-100%) rotate(${lean}deg) ${flip ? "scaleX(-1)" : ""}`,
+        transformOrigin: "50% 100%",
+        width: w, height: h,
+        filter: glow ? `drop-shadow(0 0 12px ${glow})` : undefined,
+        transition: "transform 220ms cubic-bezier(0.34,1.56,0.64,1)",
+      }}>
+      <img src={dummySprite} alt="" draggable={false}
+        style={{
+          width: "100%", height: "100%", objectFit: "contain",
+          imageRendering: "pixelated",
+          filter: red
+            ? "brightness(0.9) sepia(1) hue-rotate(-40deg) saturate(4) drop-shadow(0 0 6px #ff3a3a)"
+            : color ? `drop-shadow(0 0 6px ${color})` : undefined,
+        }} />
+      <div className="absolute left-1/2 -translate-x-1/2 text-[8px] uppercase tracking-wider opacity-55 whitespace-nowrap"
+        style={{ top: h + 2, transform: `translateX(-50%) ${flip ? "scaleX(-1)" : ""}` }}>{label}</div>
     </div>
   );
 }
+
 
 function TimelineEditor({
   skill, previewT, playing, loopPreview, soundNames, onPlayToggle, onLoopToggle, onRestart, onScrub, onChange, onPlaySound,
