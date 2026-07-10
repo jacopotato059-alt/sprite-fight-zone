@@ -1111,7 +1111,7 @@ function TimelineEditor({
                 }}
                 onDoubleClick={(e) => { e.stopPropagation(); removeKeyframe(i); }}
                 title={`${k.kind} — ${KEYFRAME_DESCRIPTIONS[k.kind]}`}
-                className="absolute w-5 rounded-sm cursor-grab touch-none"
+                className="absolute w-5 rounded-sm cursor-grab touch-none kf-marker"
                 style={{
                   left: `calc(${k.t * 100}% - 10px)`,
                   top: 22 + (row % 3) * 25,
