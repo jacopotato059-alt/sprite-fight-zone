@@ -1066,9 +1066,9 @@ function TimelineEditor({
               const count = layer === "all" ? skill.timeline.length : skill.timeline.filter((k) => (k.layer ?? "base") === layer).length;
               return (
                 <button key={layer} type="button" onClick={() => setActiveLayer(layer)}
-                  className="shrink-0 xl:w-full text-left px-2 py-1.5 rounded text-[11px]"
-                  style={{ background: activeLayer === layer ? "#2b1f4a" : "#15151f", border: `1px solid ${activeLayer === layer ? "#7a55d6" : "#2a2a3a"}` }}>
-                  <span className="font-bold">{layer === "all" ? "All layers" : layer}</span>
+                  className="shrink-0 xl:w-full text-left px-2 py-1.5 rounded text-[11px] layer-row-in"
+                  style={{ background: activeLayer === layer ? "#2b1f4a" : "#15151f", border: `1px solid ${activeLayer === layer ? "#7a55d6" : "#2a2a3a"}`, boxShadow: activeLayer === layer ? "0 0 10px rgba(122,85,214,0.4)" : "none" }}>
+                  <span className="font-bold">{layer === "all" ? "🎨 All layers" : `▸ ${layer}`}</span>
                   <span className="opacity-55"> · {count}</span>
                 </button>
               );
