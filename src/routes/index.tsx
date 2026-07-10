@@ -448,6 +448,7 @@ function Game() {
   const [debugAi, setDebugAi] = useState(false);
   const [paused, setPaused] = useState(false);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
+  const [arenaMap, setArenaMap] = useState<"void" | "neon" | "temple" | "storm" | "cyber">("void");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
   const [showBeta, setShowBeta] = useState(false);
@@ -2191,7 +2192,7 @@ function Game() {
   const controlledDef = controlled ? FIGHTERS[controlled.type] : null;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden gradient-bg">
+    <div className={`relative h-screen w-screen overflow-hidden arena-bg arena-${arenaMap}`}>
       <div className="absolute top-4 right-4 z-30 flex gap-2 flex-wrap justify-end" style={{ maxWidth: "70vw" }}>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setPaused((p) => !p); }} style={{ background: paused ? "#3a6a3a" : undefined }}>
           {paused ? "▶ Play" : "❚❚ Pause"}
@@ -2207,6 +2208,19 @@ function Game() {
           <option value="normal">AI: NORMAL</option>
           <option value="hard">AI: HARD</option>
           <option value="insane">AI: INSANE</option>
+        </select>
+        <select
+          value={arenaMap}
+          onChange={(e) => { playSound(SOUNDS.click, 0.4); setArenaMap(e.target.value as typeof arenaMap); }}
+          className="mc-btn"
+          style={{ fontFamily: "Chakra Petch", fontWeight: 700, letterSpacing: 1, padding: "6px 10px" }}
+          title="Choose battlefield map"
+        >
+          <option value="void">🌌 VOID</option>
+          <option value="neon">🌃 NEON CITY</option>
+          <option value="temple">🔥 TEMPLE</option>
+          <option value="storm">⛈ STORM</option>
+          <option value="cyber">💾 CYBER GRID</option>
         </select>
         <div className="mc-btn flex items-center gap-2" style={{ cursor: "default", padding: "6px 10px" }}>
           <span style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11 }}>HP {hpMult.toFixed(1)}x</span>
@@ -2240,12 +2254,8 @@ function Game() {
       </h1>
 
       <div ref={arenaRef} className="absolute inset-0 z-10">
-        <div className="absolute left-0 right-0 bottom-0" style={{
-          height: GROUND_OFFSET,
-          background: "linear-gradient(180deg, #2b2b2b 0%, #1a1a1a 100%)",
-          borderTop: "2px solid #000",
-          boxShadow: "inset 0 2px 0 0 #4a4a4a",
-        }} />
+        <div className={`absolute left-0 right-0 bottom-0 arena-floor-${arenaMap}`} style={{ height: GROUND_OFFSET }} />
+
 
         {wallsRef.current.map((wall) => (
           <div key={wall.uid} className="absolute pointer-events-none"
