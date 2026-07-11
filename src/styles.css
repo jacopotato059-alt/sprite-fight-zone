@@ -281,3 +281,193 @@
   font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
   margin-bottom: 10px;
 }
+
+/* =============== Main Menu Hub =============== */
+.menu-shell {
+  background:
+    radial-gradient(1200px 700px at 15% 10%, #2b1750 0%, transparent 60%),
+    radial-gradient(900px 600px at 110% 100%, #0c2a3a 0%, transparent 55%),
+    radial-gradient(600px 400px at 50% 50%, rgba(122,85,214,0.10) 0%, transparent 70%),
+    linear-gradient(180deg, #06060d 0%, #030308 100%);
+  animation: menu-fade-in 0.5s ease-out;
+}
+@keyframes menu-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.menu-star {
+  position: absolute; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 6px #fff;
+  animation: menu-star-twinkle 4s ease-in-out infinite;
+  opacity: 0.7;
+}
+@keyframes menu-star-twinkle {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1.4); }
+}
+
+.menu-orb {
+  position: absolute; width: 480px; height: 480px; border-radius: 50%;
+  filter: blur(80px); pointer-events: none; opacity: 0.55;
+  mix-blend-mode: screen;
+}
+.menu-orb-a { top: -120px; left: -80px;  background: #7a55d6; animation: menu-orb-drift-a 18s ease-in-out infinite; }
+.menu-orb-b { bottom: -160px; right: -120px; background: #4ac6d6; animation: menu-orb-drift-b 22s ease-in-out infinite; }
+@keyframes menu-orb-drift-a { 0%,100% { transform: translate(0,0); } 50% { transform: translate(80px, 60px); } }
+@keyframes menu-orb-drift-b { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-100px, -40px); } }
+
+.menu-scanlines {
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0 1px, transparent 1px 3px);
+}
+
+.menu-title {
+  display: flex; flex-direction: column; line-height: 0.9;
+  font-family: "Chakra Petch", sans-serif;
+}
+.menu-title-sub {
+  font-size: 14px; letter-spacing: 8px; color: #9a7ad6; font-weight: 700;
+  text-shadow: 0 0 8px rgba(122,85,214,0.6);
+}
+.menu-title-main {
+  font-size: clamp(36px, 6vw, 68px); font-weight: 900; letter-spacing: 6px; color: #fff;
+  text-shadow: 3px 3px 0 #000, 0 0 20px rgba(154,122,214,0.5), 0 0 40px rgba(122,85,214,0.3);
+  background: linear-gradient(180deg, #fff 0%, #c6b8ea 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: menu-title-pulse 4s ease-in-out infinite;
+}
+@keyframes menu-title-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.15); } }
+.menu-title-tag { font-size: 10px; letter-spacing: 5px; color: #6a5a8a; margin-top: 4px; text-transform: uppercase; }
+
+.menu-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border: 1px solid #2a2a3a;
+  background: rgba(20,15,35,0.7); backdrop-filter: blur(8px);
+  font-family: "Chakra Petch", sans-serif; font-weight: 700; font-size: 10px;
+  color: #9a9aba; letter-spacing: 2px; text-transform: uppercase;
+  border-radius: 3px;
+}
+
+.menu-section-label {
+  font-family: "Chakra Petch", sans-serif; font-weight: 700;
+  font-size: 10px; letter-spacing: 4px; color: #7a6aa8;
+  text-transform: uppercase; padding-left: 8px; border-left: 2px solid #7a55d6;
+}
+
+.menu-tile {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; min-height: 82px;
+  background: linear-gradient(135deg, rgba(30,20,55,0.85) 0%, rgba(15,10,30,0.85) 100%);
+  border: 1px solid #2a2540; border-left: 3px solid var(--tile-accent, #7a55d6);
+  border-radius: 4px; cursor: pointer; width: 100%;
+  transition: transform 160ms ease, border-color 160ms, box-shadow 200ms, background 200ms;
+  opacity: 0; animation: menu-tile-in 0.4s ease-out forwards;
+  overflow: hidden;
+}
+@keyframes menu-tile-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.menu-tile::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(280px 100px at 100% 0%, color-mix(in oklab, var(--tile-accent, #7a55d6) 30%, transparent), transparent 70%);
+  opacity: 0; transition: opacity 200ms;
+}
+.menu-tile:hover {
+  transform: translateY(-3px) scale(1.02);
+  border-color: var(--tile-accent, #7a55d6);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 20px color-mix(in oklab, var(--tile-accent, #7a55d6) 40%, transparent);
+}
+.menu-tile:hover::before { opacity: 1; }
+.menu-tile-icon {
+  font-size: 28px; width: 44px; height: 44px; display: grid; place-items: center;
+  background: color-mix(in oklab, var(--tile-accent, #7a55d6) 20%, #0a0a12);
+  border: 1px solid color-mix(in oklab, var(--tile-accent, #7a55d6) 60%, #000);
+  color: #fff; border-radius: 3px;
+  text-shadow: 0 0 8px color-mix(in oklab, var(--tile-accent, #7a55d6) 70%, transparent);
+}
+.menu-tile-body { flex: 1; min-width: 0; }
+.menu-tile-label {
+  font-family: "Chakra Petch"; font-weight: 800; font-size: 15px; letter-spacing: 2px;
+  color: #fff; text-transform: uppercase;
+}
+.menu-tile-hint { font-size: 11px; color: #8a7aa8; margin-top: 2px; letter-spacing: 0.5px; }
+.menu-tile-locked { opacity: 0.6; }
+.menu-tile-badge {
+  position: absolute; top: 8px; right: 8px;
+  font-size: 9px; letter-spacing: 2px; padding: 2px 6px;
+  background: #3a2418; color: #d6a94a; border: 1px solid #d6a94a; border-radius: 2px;
+}
+
+.menu-featured {
+  display: flex; flex-direction: column;
+  padding: 16px; border: 1px solid #2a2540; border-radius: 4px;
+  background: linear-gradient(180deg, rgba(20,15,40,0.7) 0%, rgba(10,8,20,0.7) 100%);
+  backdrop-filter: blur(6px);
+}
+.menu-featured-stage {
+  background:
+    radial-gradient(circle at 50% 90%, rgba(122,85,214,0.35) 0%, transparent 60%),
+    linear-gradient(180deg, #14102a 0%, #060410 100%);
+  border: 1px solid #2a2540;
+}
+.menu-featured-sprite {
+  width: 60%; max-width: 260px; height: auto;
+  filter: drop-shadow(0 0 18px rgba(154,122,214,0.6)) drop-shadow(0 0 4px #000);
+  animation: menu-featured-bob 3s ease-in-out infinite;
+}
+@keyframes menu-featured-bob {
+  0%,100% { transform: translateY(0) scale(1); }
+  50%     { transform: translateY(-8px) scale(1.02); }
+}
+
+.menu-notes { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.menu-notes li {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 12px; color: #a89ac8; letter-spacing: 0.5px;
+  padding: 8px 12px; background: rgba(20,15,40,0.5); border-left: 2px solid #7a55d6; border-radius: 3px;
+  opacity: 0; animation: menu-note-in 0.4s ease-out forwards;
+}
+@keyframes menu-note-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+.menu-notes-dot {
+  width: 6px; height: 6px; margin-top: 6px; background: #7a55d6; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 0 8px #7a55d6;
+}
+
+.menu-quest {
+  padding: 10px 12px; background: rgba(20,15,40,0.6);
+  border: 1px solid #2a2540; border-radius: 3px;
+}
+.menu-quest-label { font-size: 10px; letter-spacing: 1.5px; color: #a89ac8; text-transform: uppercase; }
+.menu-quest-bar {
+  height: 6px; background: #0a0812; border: 1px solid #2a2540; margin: 8px 0; border-radius: 2px; overflow: hidden;
+}
+.menu-quest-bar > span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #7a55d6 0%, #4ac6d6 100%);
+  box-shadow: 0 0 8px #7a55d6;
+  transition: width 400ms ease;
+}
+.menu-quest-reward { font-size: 10px; color: #d6a94a; letter-spacing: 1.5px; text-transform: uppercase; }
+
+.menu-cta {
+  background: linear-gradient(180deg, #b04a3a 0%, #7a2f22 50%, #501f18 100%) !important;
+  box-shadow: inset 2px 2px 0 0 #d67a6a, inset -2px -2px 0 0 #2a1410, 0 0 20px rgba(176,74,58,0.5) !important;
+  animation: menu-cta-pulse 2s ease-in-out infinite;
+}
+@keyframes menu-cta-pulse {
+  0%,100% { box-shadow: inset 2px 2px 0 0 #d67a6a, inset -2px -2px 0 0 #2a1410, 0 0 20px rgba(176,74,58,0.5); }
+  50%     { box-shadow: inset 2px 2px 0 0 #d67a6a, inset -2px -2px 0 0 #2a1410, 0 0 32px rgba(176,74,58,0.9); }
+}
+
+.menu-toast {
+  position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+  padding: 10px 20px; background: rgba(15,10,30,0.95); border: 1px solid #7a55d6;
+  color: #fff; font-family: "Chakra Petch"; font-weight: 700; font-size: 12px;
+  letter-spacing: 2px; text-transform: uppercase; border-radius: 3px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 20px rgba(122,85,214,0.4);
+  animation: menu-toast-in 0.3s ease-out;
+  z-index: 70;
+}
+@keyframes menu-toast-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
