@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import dekuSprite from "@/assets/deku.png";
-import yujiSprite from "@/assets/yuji.png";
-import sukunaSprite from "@/assets/sukuna.png";
-import davidSprite from "@/assets/david.png";
+import dekuAsset from "@/assets/deku.png.asset.json";
+import yujiAsset from "@/assets/yuji.png.asset.json";
+import sukunaAsset from "@/assets/sukuna.png.asset.json";
+import davidAsset from "@/assets/david.png.asset.json";
+const dekuSprite = dekuAsset.url;
+const yujiSprite = yujiAsset.url;
+const sukunaSprite = sukunaAsset.url;
+const davidSprite = davidAsset.url;
 
 type TileKey =
   | "battle" | "fighters" | "summon" | "builder"
