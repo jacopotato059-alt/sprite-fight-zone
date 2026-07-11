@@ -1,84 +1,37 @@
-## Goal
-Big overhaul of the fighting sandbox: perf, AI difficulty, duel mode, pause/play, HP customization, more abilities (Dummy, Yuji, Sukuna, David), Sukuna slash 0.9 CD + passive, Yuji passive, and a full **Fighter/Skill Builder** workspace with sprite upload, animations, melee/projectile/effect picker, recolorable presets, and sound library.
+# Ani Fighters — Modernization Roadmap
 
-Given the scope, I'll ship this in **two passes**. Pass 1 below is what I'll build now. Pass 2 (the full custom-builder UI + persistence) I'll outline so you can confirm before I spend the time.
+Your full wishlist covers ~12 priorities across 5000 lines of game code — realistically 4-6 shipping passes. Here's the plan; I'll do one pass per turn and pause for feedback.
 
----
+## Pass A — Main Menu Hub (SHIPPED)
+- New animated Main Menu overlay (`src/components/MainMenu.tsx`) as the front door.
+- Category tiles: Battle, Fighters, Skill Builder (ready) + Summon, Missions, Shop, Collection, Rankings, Settings (stubs with "coming next" toast).
+- Featured fighter carousel (auto-rotates 4 characters).
+- Daily login streak (localStorage), daily quest progress bars, patch notes panel.
+- Animated title, drifting orbs, starfield, scanlines, sheen — modern anime-arena look.
+- `Menu` button in the top bar so you can reopen it any time.
 
-## Pass 1 — Ship now (single edit to `src/routes/index.tsx`)
+## Pass B — Combat Feel (next)
+- Screen shake scaled by damage; longer hitstop on heavy hits.
+- Idle bob per fighter archetype; unique summon burst rings.
+- Attack combo animation blending (windup → active → recovery, not static poses).
+- KO defeat pose (fall + fade + slow-mo hitstop when last enemy dies).
+- Crit indicator, combo counter HUD per fighter, floating damage numbers with rarity colors.
+- Charge-up glow on ultimates, aura transformations, air combat lift/dive polish.
 
-### Performance
-- Cap effects array (drop oldest when >120). Cap projectiles. Skip per-frame Math.hypot where cheap squared-distance works.
-- Throttle React re-renders for HUD to ~15fps; sim loop stays 60fps via refs.
-- Reuse arrays for sparks instead of `.map` allocations. Remove redundant DOM nodes for dead effects.
-- Lower `electric` spark density on long whips (cap to 8).
+## Pass C — Skill Builder v3 (tabs + polish)
+- Tabbed workspace: Basic / Movement / Active / Ultimate / Passive / Transform / VFX / SFX / AI / Style.
+- DPS calculator, skill rarity, ability templates gallery, save/load presets, share codes (base64 JSON).
+- Ability preview window (test arena inline).
 
-### Watch / camera smoothing
-- Lerp screen-shake decay (exponential) instead of step.
-- Lerp hitstop ramp in/out so it doesn't pop.
+## Pass D — Modes & Progression
+- Survival, Boss Rush, Tower Climb, 1v1 / 2v2 quick-play modes (arena reuse, wave scripts).
+- Player level + XP from battles (localStorage), fighter mastery per type, achievements, daily/weekly quests wired to real events.
+- Leaderboard scaffold (local best times/streaks).
 
-### AI Difficulty (Easy / Normal / Hard / Insane)
-- Per-difficulty tunables: reaction delay, retreat threshold, dodge chance, punish window, ability priority weights, aim error.
-- Easy: slow reactions, rare ability use. Insane: instant punish, perfect spacing, frame-perfect combo chains.
+## Pass E — Retention
+- Battle pass track (localStorage), login rewards screen, rotating weekly boss, seasonal cosmetic tint slots.
 
-### Duel Test Mode
-- New mode toggle in lobby: **Duel** = 1v1, fixed roster pick for both sides, infinite rematch counter, no team logic.
-- Win screen with "Rematch" / "Back to Lobby".
+## Pass F — Missing UX
+- Damage testing room, replay recorder (state snapshots), loadouts, favorites, sort/search on roster.
 
-### Pause / Play
-- Top-bar button. Pauses sim loop (dt=0) and audio. Resume restores.
-- Spacebar shortcut.
-
-### Customizable HP
-- Lobby slider per fighter: HP multiplier 0.5×–3×. Applied at spawn.
-
-### Sukuna
-- `slashCd = 0.9` (was higher).
-- New ability **Cleave Step**: short dash + arcing slash, 3 CD, 28 dmg, applies bleed.
-- New ability **Domain Pulse**: ground shockwave, 18 CD, 40 dmg + brief stun in radius.
-- **Passive — Malevolent Shrine**: every 3rd slash within 4s leaves a lingering cut zone (5 dmg/0.5s for 2s).
-
-### Yuji
-- **Passive — Cursed Reservoir**: builds 1 stack per hit landed/taken (max 5). At 5 stacks next punch is **Black Flash** auto-empowered (+50% dmg, hitstop, shake).
-- New combo starter **Divergent Fist Feint**: short-hop overhead, launches enemy upward (combo opener), 6 CD.
-- New **Manji Kick**: spinning aerial kick, only airborne, 5 CD, knocks sideways.
-- New **Cursed Strike Chain**: 3-hit dash combo, 8 CD, finishes with Black Flash if passive stacks ≥3.
-
-### Dummy
-- New **Iron Guard**: 50% damage reduction for 2.5s, 12 CD.
-- New **Pummel**: heavy stomp AoE, 14 CD, 35 dmg + brief stun.
-- New **Counter Stance**: 1.5s parry window; if hit, auto-counter for 40 dmg, 16 CD.
-
-### David Martinez
-- New **Reflex Boost**: short Sandevistan mini-burst (0.8s), 8 CD.
-- New **Mantis Slash**: close-range slash combo (2 hits, 22+30), 7 CD.
-- New **Overclock**: temporary +30% speed & atk for 4s, 22 CD; locks the existing Sandevistan during overclock.
-
-### Misc polish
-- Hit numbers float upward and fade (already exists — tune lifetime).
-- Combo counter HUD per fighter.
-- New SFX variants reuse existing assets (no new uploads in Pass 1).
-
----
-
-## Pass 2 — Fighter/Skill Builder (confirm before I build)
-
-This is a real feature — wants its own route, persistence (Lovable Cloud), and a moderate UI. Outline:
-
-- New route `/builder` with a workspace:
-  - **Sprite**: upload image (Lovable Cloud storage) or pick from library.
-  - **Stats**: HP, Atk, Speed, Defense sliders.
-  - **Skills (up to 6)**: each skill has
-    - Animation: lunge / dash / hop / spin / windup-hold / teleport
-    - Type: Melee / Projectile / AoE / Buff / Heal / Dash
-    - Effect preset (recolorable): shockwave, spark, electric, ring, slash arc, beam — color picker + intensity
-    - Sound: pick from in-game library or upload
-    - Damage / CD / range / projectile speed
-  - **Passive**: pick from list (lifesteal, second wind, rage, stacks→empower, etc.)
-  - **Save / Load**: stored in Cloud table `custom_fighters`, listed in lobby with the built-ins.
-
-I'll need Lovable Cloud enabled for persistence + sprite/sound uploads. Confirm and I'll do Pass 2 right after Pass 1 lands.
-
----
-
-Shipping Pass 1 now. Reply "go pass 2" (or with tweaks) after you try it.
+Reply with which pass to run next, or "go B" / "go C" etc.

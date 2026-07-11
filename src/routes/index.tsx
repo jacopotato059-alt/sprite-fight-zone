@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MainMenu } from "@/components/MainMenu";
 
 type DuelModifier = "none" | "glass" | "iron" | "mirror";
 import dummySprite from "@/assets/dummy.png";
@@ -442,6 +443,7 @@ function CustomProjectileView({ p }: { p: Projectile }) {
 }
 
 function Game() {
+  const [showMenu, setShowMenu] = useState(true);
   const [showFighters, setShowFighters] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<FighterTypeId>("dummy");
   const [showStats, setShowStats] = useState(false);
@@ -2193,7 +2195,14 @@ function Game() {
 
   return (
     <div className={`relative h-screen w-screen overflow-hidden arena-bg arena-${arenaMap}`}>
+      {showMenu && (
+        <MainMenu
+          onEnterBattle={() => { playSound(SOUNDS.click, 0.5); setShowMenu(false); }}
+          onFighters={() => { setShowMenu(false); setShowFighters(true); }}
+        />
+      )}
       <div className="absolute top-4 right-4 z-30 flex gap-2 flex-wrap justify-end" style={{ maxWidth: "70vw" }}>
+        <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setShowMenu(true); }} title="Main menu">☰ Menu</button>
         <button className="mc-btn" onClick={() => { playSound(SOUNDS.click, 0.5); setPaused((p) => !p); }} style={{ background: paused ? "#3a6a3a" : undefined }}>
           {paused ? "▶ Play" : "❚❚ Pause"}
         </button>
