@@ -450,7 +450,7 @@ function Game() {
   const [debugAi, setDebugAi] = useState(false);
   const [paused, setPaused] = useState(false);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
-  const [arenaMap, setArenaMap] = useState<"void" | "neon" | "temple" | "storm" | "cyber">("void");
+  const [arenaMap, setArenaMap] = useState<"void" | "neon" | "temple" | "storm" | "cyber" | "colosseum" | "sky" | "lava">("void");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
   const [showBeta, setShowBeta] = useState(false);
@@ -2195,6 +2195,7 @@ function Game() {
 
   return (
     <div className={`relative h-screen w-screen overflow-hidden arena-bg arena-${arenaMap}`}>
+      <div className={`arena-parallax parallax-${arenaMap}`} aria-hidden />
       {showMenu && (
         <MainMenu
           onEnterBattle={() => { playSound(SOUNDS.click, 0.5); setShowMenu(false); }}
@@ -2230,6 +2231,9 @@ function Game() {
           <option value="temple">🔥 TEMPLE</option>
           <option value="storm">⛈ STORM</option>
           <option value="cyber">💾 CYBER GRID</option>
+          <option value="colosseum">🏛 COLOSSEUM</option>
+          <option value="sky">🌅 SKY FORTRESS</option>
+          <option value="lava">🌋 LAVA PIT</option>
         </select>
         <div className="mc-btn flex items-center gap-2" style={{ cursor: "default", padding: "6px 10px" }}>
           <span style={{ fontFamily: "Chakra Petch", fontWeight: 700, fontSize: 11 }}>HP {hpMult.toFixed(1)}x</span>
