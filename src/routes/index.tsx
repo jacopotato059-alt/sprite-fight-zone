@@ -2195,6 +2195,7 @@ function Game() {
 
   return (
     <div className={`relative h-screen w-screen overflow-hidden arena-bg arena-${arenaMap}`}>
+      <div className={`arena-parallax parallax-${arenaMap}`} aria-hidden />
       {showMenu && (
         <MainMenu
           onEnterBattle={() => { playSound(SOUNDS.click, 0.5); setShowMenu(false); }}
