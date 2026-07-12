@@ -450,7 +450,7 @@ function Game() {
   const [debugAi, setDebugAi] = useState(false);
   const [paused, setPaused] = useState(false);
   const [difficulty, setDifficulty] = useState<AiDifficulty>("normal");
-  const [arenaMap, setArenaMap] = useState<"void" | "neon" | "temple" | "storm" | "cyber">("void");
+  const [arenaMap, setArenaMap] = useState<"void" | "neon" | "temple" | "storm" | "cyber" | "colosseum" | "sky" | "lava">("void");
   const [hpMult, setHpMult] = useState(1);
   const [duelMod, setDuelMod] = useState<DuelModifier>("none");
   const [showBeta, setShowBeta] = useState(false);
