@@ -399,6 +399,75 @@
 .kf-marker { transition: box-shadow 120ms, transform 120ms; }
 .kf-marker:hover { transform: translateY(-2px); }
 
+/* Editor tab bar */
+.editor-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 4px; border-radius: 10px;
+  background: rgba(9,9,14,0.7);
+  border: 1px solid #22223a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.editor-tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 8px;
+  font-family: "Chakra Petch", sans-serif;
+  font-weight: 700; font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+  color: #cfcfe0; background: transparent; border: 1px solid transparent;
+  cursor: pointer; overflow: hidden;
+  transition: color 180ms ease, background 220ms ease, border-color 220ms ease, transform 180ms ease;
+}
+.editor-tab:hover { color: #fff; background: rgba(122,85,214,0.10); transform: translateY(-1px); }
+.editor-tab .editor-tab-icon { font-size: 14px; opacity: 0.9; }
+.editor-tab.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(122,85,214,0.28), rgba(59,36,105,0.55));
+  border-color: #7a55d6;
+  box-shadow: 0 6px 22px -6px rgba(122,85,214,0.65), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.editor-tab.is-active::after {
+  content: ""; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px;
+  background: linear-gradient(90deg, #62e7ff, #7a55d6, #ff4d6d);
+  border-radius: 2px; animation: tab-underline 0.35s ease-out both;
+}
+@keyframes tab-underline {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+.editor-tab-panel { animation: tab-panel-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes tab-panel-in {
+  from { opacity: 0; transform: translateY(6px); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0);   filter: blur(0); }
+}
+.editor-section-title {
+  font-family: "Chakra Petch", sans-serif;
+  font-weight: 800; font-size: 12px; letter-spacing: 3px; text-transform: uppercase;
+  color: #f4f4ff; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 10px;
+}
+.editor-section-title::before {
+  content: ""; width: 3px; height: 14px; border-radius: 2px;
+  background: linear-gradient(180deg, #62e7ff, #7a55d6);
+  box-shadow: 0 0 8px rgba(122,85,214,0.6);
+}
+.editor-section-title .editor-section-hint {
+  font-size: 10px; font-weight: 500; letter-spacing: 2px; color: rgba(255,255,255,0.45);
+}
+.skill-chip {
+  position: relative; padding: 6px 12px; border-radius: 999px;
+  font-family: "Chakra Petch", sans-serif; font-weight: 700;
+  font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+  background: #15151f; border: 1px solid #2a2a3a; color: #d8d8ea;
+  transition: transform 160ms ease, border-color 200ms ease, background 200ms ease, box-shadow 200ms ease;
+  cursor: pointer;
+}
+.skill-chip:hover { transform: translateY(-1px); border-color: #7a55d6; }
+.skill-chip.is-active {
+  background: linear-gradient(180deg, #3b2469, #2a1a4d);
+  border-color: #7a55d6; color: #fff;
+  box-shadow: 0 4px 14px -4px rgba(122,85,214,0.7);
+}
+
 .map-chip {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 6px 10px; border: 1px solid #2a2a3a;
