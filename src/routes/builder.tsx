@@ -602,187 +602,42 @@ function Builder() {
                 </div>
               </div>
 
-              {/* Skill tabs */}
-              <div className="flex flex-wrap gap-2 mb-3 border-b pb-3" style={{ borderColor: "#1f1f2c" }}>
+              {/* Skill tabs (which skill) */}
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <div className="text-[10px] tracking-[3px] opacity-50 mr-1">SKILL</div>
                 {activeFighter.skills.map((s) => (
                   <button key={s.id} onClick={() => setActiveSkillId(s.id)}
-                    className="px-3 py-1.5 text-xs rounded"
-                    style={{
-                      background: s.id === activeSkill?.id ? "#3b2469" : "#15151f",
-                      border: `1px solid ${s.id === activeSkill?.id ? "#7a55d6" : "#2a2a3a"}`,
-                    }}>{s.name}</button>
+                    className={`skill-chip ${s.id === activeSkill?.id ? "is-active" : ""}`}>
+                    {s.name}
+                  </button>
                 ))}
-                <button className="px-3 py-1.5 text-xs rounded" style={btnStyle("#1f3a2a")} onClick={addSkill}>+ SKILL</button>
-                <button className="px-3 py-1.5 text-xs rounded" style={btnStyle("#3a1f1f")} onClick={removeSkill}>−</button>
+                <button className="skill-chip" style={{ background: "#1f3a2a", borderColor: "#2f5f3f" }} onClick={addSkill}>+ ADD</button>
+                <button className="skill-chip" style={{ background: "#3a1f1f", borderColor: "#5f2f2f" }} onClick={removeSkill}>−</button>
               </div>
 
               {activeSkill && (
-                <>
-                  <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] gap-3 items-start">
-                      <div>
-                        <Label>Move Name</Label>
-                        <input value={activeSkill.name}
-                          onChange={(e) => updateSkill((s) => ({ ...s, name: e.target.value }))}
-                          className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-base font-bold" />
-                      </div>
-                      <div>
-                        <Label>Attack Type</Label>
-                        <select value={activeSkill.anim}
-                          onChange={(e) => updateSkill((s) => ({ ...s, anim: e.target.value as AnimType }))}
-                          className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-sm">
-                          {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                        </select>
-                        <p className="mt-1 text-[10px] leading-snug opacity-60">{ANIM_TYPES.find((a) => a.id === activeSkill.anim)?.desc}</p>
-                      </div>
-                    </div>
-                    <AttackTypePreview skill={activeSkill} t={previewT} />
-                  </section>
-
-                  <section className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <Label>Attack Templates — hover for how it works</Label>
-                      <span className="text-[10px] opacity-50">Click one to replace this move</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-                      {ATTACK_TEMPLATES.map((tpl) => (
-                        <button key={tpl.name} type="button" title={tpl.blurb}
-                          onClick={() => applyTemplate(tpl)}
-                          className="group relative h-28 overflow-hidden rounded text-left p-2"
-                          style={{ background: "#0d0d14", border: "1px solid #2a2a3a" }}>
-                          <div className="absolute inset-0 opacity-80">
-                            {tpl.preview.map((p, i) => <FxBlob key={p + i} preset={p} color={tpl.color} intensity={0.65 + i * 0.18} playing fxSpeed={tpl.fxSpeed ?? 1} />)}
-                          </div>
-                          <div className="relative z-10 font-bold text-xs tracking-wider">{tpl.name}</div>
-                          <div className="relative z-10 mt-1 text-[10px] opacity-70">{tpl.anim.toUpperCase()} • {tpl.damage} DMG • {tpl.cooldown}s</div>
-                          <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform p-2 text-[10px] leading-snug"
-                            style={{ background: "rgba(0,0,0,0.86)" }}>{tpl.blurb}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div className="hidden">
-                      <Label>Name</Label>
-                      <input value={activeSkill.name}
-                        onChange={(e) => updateSkill((s) => ({ ...s, name: e.target.value }))}
-                        className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm" />
-                    </div>
-                    <div>
-                      <Label>Animation Type</Label>
-                      <select value={activeSkill.anim}
-                        onChange={(e) => updateSkill((s) => ({ ...s, anim: e.target.value as AnimType }))}
-                        className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm">
-                        {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
-                      </select>
-                    </div>
-                    <Stat label="Damage" value={activeSkill.damage} min={0} max={200} step={1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, damage: v }))} />
-                    <Stat label="Cooldown (s)" value={activeSkill.cooldown} min={0.1} max={30} step={0.1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, cooldown: v }))} />
-                    <Stat label="Range (px)" value={activeSkill.range} min={20} max={800} step={5}
-                      onChange={(v) => updateSkill((s) => ({ ...s, range: v }))} />
-                    <Stat label="Projectile Speed" value={activeSkill.projSpeed} min={0} max={2400} step={20}
-                      disabled={activeSkill.anim !== "projectile"}
-                      onChange={(v) => updateSkill((s) => ({ ...s, projSpeed: v }))} />
-                    <Stat label="Duration (s)" value={activeSkill.duration} min={0.1} max={5} step={0.1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, duration: v }))} />
-                    <Stat label="FX Speed" value={activeSkill.fxSpeed ?? 1} min={0.3} max={3} step={0.1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, fxSpeed: v }))} />
-                    <Stat label="Multi-Hits" value={activeSkill.hits ?? 1} min={1} max={8} step={1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, hits: v }))} />
-                    <Stat label="Knockback" value={activeSkill.knockback ?? 200} min={0} max={2000} step={20}
-                      onChange={(v) => updateSkill((s) => ({ ...s, knockback: v }))} />
-                    <Stat label="Lifesteal %" value={Math.round((activeSkill.lifesteal ?? 0) * 100)} min={0} max={100} step={1}
-                      onChange={(v) => updateSkill((s) => ({ ...s, lifesteal: v / 100 }))} />
-                    <Stat label="Stun (s)" value={activeSkill.stun ?? 0} min={0} max={3} step={0.05}
-                      onChange={(v) => updateSkill((s) => ({ ...s, stun: v }))} />
-                    <div>
-                      <Label>Passive (fighter)</Label>
-                      <select value={activeSkill.passive}
-                        onChange={(e) => updateSkill((s) => ({ ...s, passive: e.target.value }))}
-                        className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm">
-                        {PASSIVES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Effect picker as a visual grid */}
-                  <div className="mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <Label>Effect Preset (live previews — click to choose)</Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
-                      {EFFECT_PRESETS.map((e) => (
-                        <button key={e}
-                          onClick={() => updateSkill((s) => ({ ...s, effect: e }))}
-                          className="relative h-20 rounded overflow-hidden"
-                          style={{
-                            background: "#0d0d14",
-                            border: `1px solid ${activeSkill.effect === e ? activeSkill.color : "#2a2a3a"}`,
-                            boxShadow: activeSkill.effect === e ? `0 0 12px ${activeSkill.color}66` : "none",
-                          }}>
-                          <FxBlob preset={e} color={activeSkill.color} intensity={1} playing fxSpeed={activeSkill.fxSpeed ?? 1} />
-                          <div className="absolute bottom-0 inset-x-0 text-[9px] uppercase tracking-wider text-center py-0.5"
-                            style={{ background: "rgba(0,0,0,0.6)" }}>{e}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 rounded-lg p-3" style={subPanelStyle()}>
-                    <div>
-                      <Label>Effect Color</Label>
-                      <div className="flex items-center gap-2">
-                        <input type="color" value={activeSkill.color}
-                          onChange={(e) => updateSkill((s) => ({ ...s, color: e.target.value }))}
-                          className="h-10 w-16 bg-[#15151f] rounded border border-[#2a2a3a]" />
-                        <input type="text" value={activeSkill.color}
-                          onChange={(e) => updateSkill((s) => ({ ...s, color: e.target.value }))}
-                          className="flex-1 bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-xs font-mono" />
-                      </div>
-                    </div>
-                    <div>
-                      <Label>Sound</Label>
-                      <div className="flex items-center gap-2">
-                        <select value={activeSkill.sound}
-                          onChange={(e) => updateSkill((s) => ({ ...s, sound: e.target.value }))}
-                          className="flex-1 bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm min-w-0">
-                          {soundNames.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <button title="Preview" className="px-2 py-1.5 text-xs rounded shrink-0"
-                          style={btnStyle("#1c3a2a")}
-                          onClick={() => playSoundPreview(activeSkill.sound)}>▶</button>
-                        <button title="Upload sound" className="px-2 py-1.5 text-xs rounded shrink-0"
-                          style={btnStyle("#3a2a1c")}
-                          onClick={() => soundFileRef.current?.click()}>+</button>
-                        <input ref={soundFileRef} type="file" accept="audio/*" className="hidden"
-                          onChange={(e) => e.target.files?.[0] && onSoundFile(e.target.files[0])} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <section className="rounded-lg p-3" style={subPanelStyle()}>
-                  <TimelineEditor
-                    skill={activeSkill}
-                    previewT={previewT}
-                    playing={playing}
-                    loopPreview={loopPreview}
-                    soundNames={soundNames}
-                    onPlaySound={playSoundPreview}
-                    onPlayToggle={() => setPlaying((p) => !p)}
-                    onLoopToggle={() => setLoopPreview((p) => !p)}
-                    onRestart={() => { setPreviewT(0); lastSoundTRef.current = -1; setPlaying(true); }}
-                    onScrub={(t) => { setPlaying(false); setPreviewT(t); lastSoundTRef.current = t; }}
-                    onChange={(timeline) => updateSkill((s) => ({ ...s, timeline }))}
-                  />
-                  </section>
-
-                  <PreviewPane skill={activeSkill} t={previewT} />
-                </>
+                <EditorTabs
+                  key={activeSkill.id}
+                  skill={activeSkill}
+                  previewT={previewT}
+                  playing={playing}
+                  loopPreview={loopPreview}
+                  soundNames={soundNames}
+                  onPlaySound={playSoundPreview}
+                  onPlayToggle={() => setPlaying((p) => !p)}
+                  onLoopToggle={() => setLoopPreview((p) => !p)}
+                  onRestart={() => { setPreviewT(0); lastSoundTRef.current = -1; setPlaying(true); }}
+                  onScrub={(t) => { setPlaying(false); setPreviewT(t); lastSoundTRef.current = t; }}
+                  updateSkill={updateSkill}
+                  applyTemplate={applyTemplate}
+                  soundFileRef={soundFileRef}
+                  onSoundFile={onSoundFile}
+                />
               )}
             </>
           ) : <div className="opacity-60">No fighter selected.</div>}
         </main>
+
 
         {/* Right: Inspector */}
         <aside className="rounded-lg p-3 flex flex-col gap-3 lg:col-span-2 xl:col-span-1" style={panelStyle()}>
