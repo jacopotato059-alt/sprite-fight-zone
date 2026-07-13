@@ -2401,6 +2401,35 @@ function Game() {
                     transition: "width 120ms linear",
                   }} />
                 </div>
+                {/* Pass C — Stamina bar (green) */}
+                <div className="mc-bar mt-0.5 relative" style={{ width: 96, height: 3 }}>
+                  <div style={{
+                    width: `${(f.stamina ?? 100)}%`, height: "100%",
+                    background: "linear-gradient(180deg, #6ee27a, #2d8a3d)",
+                    transition: "width 120ms linear",
+                  }} />
+                </div>
+                {/* Pass C — Ult meter (cyan → gold when ready) */}
+                {(() => {
+                  const ult = f.ult ?? 0;
+                  const ready = ult >= 100;
+                  const pulse = (f.ultReadyPulse ?? 0) > 0;
+                  return (
+                    <div className="mc-bar mt-0.5 relative" style={{
+                      width: 96, height: 4,
+                      boxShadow: ready ? "0 0 8px #ffd76a, 0 0 14px #ffb84a" : undefined,
+                      animation: pulse ? "ult-ready 0.6s ease-out" : undefined,
+                    }}>
+                      <div style={{
+                        width: `${ult}%`, height: "100%",
+                        background: ready
+                          ? "linear-gradient(90deg, #ffe27a, #ffb84a, #ff7a3a)"
+                          : "linear-gradient(90deg, #4ec1ff, #7a55d6)",
+                        transition: "width 120ms linear",
+                      }} />
+                    </div>
+                  );
+                })()}
                 {/* Cooldown pips */}
                 {(() => {
                   const slots = possessed
