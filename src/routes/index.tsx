@@ -1973,8 +1973,6 @@ function Game() {
         if ((target.cursedStacks ?? 0) >= 5) target.cursedFlashReady = true;
       }
     }
-    target.hp -= finalDmg;
-    target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
       target.bounce = 0.3;
       target.vx = fromFacing * (crit ? 360 : 260);
@@ -1993,6 +1991,22 @@ function Game() {
       dmg: finalDmg, crit,
     });
     if (!isDot) bigHit(finalDmg);
+
+    // ===== Pass C — Ult meter charging =====
+    // Target gains 0.8 * dmg (getting hit fuels rage). Attacker gains 0.5 * dmg (aggression pays off).
+    const ultGainTarget = finalDmg * 0.8;
+    const prevUltTarget = target.ult ?? 0;
+    target.ult = Math.min(100, prevUltTarget + ultGainTarget);
+    if (prevUltTarget < 100 && target.ult >= 100) target.ultReadyPulse = 0.6;
+    if (attackerUid) {
+      const att4 = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att4) {
+        const prev = att4.ult ?? 0;
+        att4.ult = Math.min(100, prev + finalDmg * 0.5);
+        if (prev < 100 && att4.ult >= 100) att4.ultReadyPulse = 0.6;
+      }
+    }
+
 
 
 
