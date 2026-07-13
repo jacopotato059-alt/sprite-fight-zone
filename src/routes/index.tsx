@@ -546,6 +546,7 @@ function Game() {
       possessed: false, windupGrow: 0, dots: [],
       stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
+      ult: 0, stamina: 100, parryWindow: 0, ultReadyPulse: 0,
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
