@@ -894,6 +894,10 @@ function Game() {
       f.decisionCd = Math.max(0, f.decisionCd - dt);
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
+      // Pass C — meters: stamina regens, parry window ticks down, ult-ready pulse decays
+      f.stamina = Math.min(100, (f.stamina ?? 100) + dt * (f.state === "idle" || f.state === "walk" ? 22 : 10));
+      if ((f.parryWindow ?? 0) > 0) f.parryWindow = Math.max(0, (f.parryWindow ?? 0) - dt);
+      if ((f.ultReadyPulse ?? 0) > 0) f.ultReadyPulse = Math.max(0, (f.ultReadyPulse ?? 0) - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
       if (f.customSkillTimer !== undefined) {
         f.customSkillTimer = Math.max(0, f.customSkillTimer - dt);
