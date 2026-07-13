@@ -671,7 +671,219 @@ function Builder() {
   );
 }
 
+// ---------------- Editor Tabs ----------------
+type EditorTabId = "basics" | "stats" | "effects" | "timeline" | "templates";
+const EDITOR_TABS: { id: EditorTabId; label: string; icon: string; hint: string }[] = [
+  { id: "basics",    label: "Basics",    icon: "◈", hint: "Name & attack type" },
+  { id: "stats",     label: "Stats",     icon: "▤", hint: "Damage, range, timing" },
+  { id: "effects",   label: "FX & Sound",icon: "✦", hint: "Visuals, color, audio" },
+  { id: "timeline",  label: "Timeline",  icon: "▸", hint: "Frame-by-frame layers" },
+  { id: "templates", label: "Templates", icon: "◆", hint: "Preset moves" },
+];
+
+function EditorTabs({
+  skill, previewT, playing, loopPreview, soundNames,
+  onPlaySound, onPlayToggle, onLoopToggle, onRestart, onScrub,
+  updateSkill, applyTemplate, soundFileRef, onSoundFile,
+}: {
+  skill: Skill; previewT: number; playing: boolean; loopPreview: boolean;
+  soundNames: string[];
+  onPlaySound: (name: string) => void;
+  onPlayToggle: () => void; onLoopToggle: () => void; onRestart: () => void;
+  onScrub: (t: number) => void;
+  updateSkill: (fn: (s: Skill) => Skill) => void;
+  applyTemplate: (tpl: (typeof ATTACK_TEMPLATES)[number]) => void;
+  soundFileRef: React.RefObject<HTMLInputElement | null>;
+  onSoundFile: (f: File) => void;
+}) {
+  const [tab, setTab] = useState<EditorTabId>("basics");
+  const activeMeta = EDITOR_TABS.find((t) => t.id === tab)!;
+
+  return (
+    <div>
+      {/* Tab bar */}
+      <div className="editor-tabs mb-4">
+        {EDITOR_TABS.map((t) => (
+          <button key={t.id} type="button" onClick={() => setTab(t.id)}
+            className={`editor-tab ${tab === t.id ? "is-active" : ""}`}>
+            <span className="editor-tab-icon">{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+        <div className="ml-auto self-center text-[10px] tracking-[2px] opacity-50 px-2 hidden md:block">
+          {activeMeta.hint}
+        </div>
+      </div>
+
+      {/* Panels */}
+      <div key={tab} className="editor-tab-panel">
+        {tab === "basics" && (
+          <section className="rounded-lg p-4" style={subPanelStyle()}>
+            <div className="editor-section-title">Basics <span className="editor-section-hint">— identity & attack type</span></div>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(220px,320px)] gap-3 items-start">
+              <div>
+                <Label>Move Name</Label>
+                <input value={skill.name}
+                  onChange={(e) => updateSkill((s) => ({ ...s, name: e.target.value }))}
+                  className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-base font-bold" />
+              </div>
+              <div>
+                <Label>Attack Type</Label>
+                <select value={skill.anim}
+                  onChange={(e) => updateSkill((s) => ({ ...s, anim: e.target.value as AnimType }))}
+                  className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-3 py-2 text-sm">
+                  {ANIM_TYPES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                </select>
+                <p className="mt-1 text-[10px] leading-snug opacity-60">{ANIM_TYPES.find((a) => a.id === skill.anim)?.desc}</p>
+              </div>
+            </div>
+            <AttackTypePreview skill={skill} t={previewT} />
+          </section>
+        )}
+
+        {tab === "stats" && (
+          <section className="rounded-lg p-4" style={subPanelStyle()}>
+            <div className="editor-section-title">Stats <span className="editor-section-hint">— tune numbers & feel</span></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+              <Stat label="Damage" value={skill.damage} min={0} max={200} step={1}
+                onChange={(v) => updateSkill((s) => ({ ...s, damage: v }))} />
+              <Stat label="Cooldown (s)" value={skill.cooldown} min={0.1} max={30} step={0.1}
+                onChange={(v) => updateSkill((s) => ({ ...s, cooldown: v }))} />
+              <Stat label="Range (px)" value={skill.range} min={20} max={800} step={5}
+                onChange={(v) => updateSkill((s) => ({ ...s, range: v }))} />
+              <Stat label="Projectile Speed" value={skill.projSpeed} min={0} max={2400} step={20}
+                disabled={skill.anim !== "projectile"}
+                onChange={(v) => updateSkill((s) => ({ ...s, projSpeed: v }))} />
+              <Stat label="Duration (s)" value={skill.duration} min={0.1} max={5} step={0.1}
+                onChange={(v) => updateSkill((s) => ({ ...s, duration: v }))} />
+              <Stat label="FX Speed" value={skill.fxSpeed ?? 1} min={0.3} max={3} step={0.1}
+                onChange={(v) => updateSkill((s) => ({ ...s, fxSpeed: v }))} />
+              <Stat label="Multi-Hits" value={skill.hits ?? 1} min={1} max={8} step={1}
+                onChange={(v) => updateSkill((s) => ({ ...s, hits: v }))} />
+              <Stat label="Knockback" value={skill.knockback ?? 200} min={0} max={2000} step={20}
+                onChange={(v) => updateSkill((s) => ({ ...s, knockback: v }))} />
+              <Stat label="Lifesteal %" value={Math.round((skill.lifesteal ?? 0) * 100)} min={0} max={100} step={1}
+                onChange={(v) => updateSkill((s) => ({ ...s, lifesteal: v / 100 }))} />
+              <Stat label="Stun (s)" value={skill.stun ?? 0} min={0} max={3} step={0.05}
+                onChange={(v) => updateSkill((s) => ({ ...s, stun: v }))} />
+              <div className="sm:col-span-2 xl:col-span-1">
+                <Label>Passive (fighter)</Label>
+                <select value={skill.passive}
+                  onChange={(e) => updateSkill((s) => ({ ...s, passive: e.target.value }))}
+                  className="w-full bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm">
+                  {PASSIVES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab === "effects" && (
+          <div className="flex flex-col gap-4">
+            <section className="rounded-lg p-4" style={subPanelStyle()}>
+              <div className="editor-section-title">Effect Preset <span className="editor-section-hint">— click a live preview</span></div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
+                {EFFECT_PRESETS.map((e) => (
+                  <button key={e}
+                    onClick={() => updateSkill((s) => ({ ...s, effect: e }))}
+                    className="relative h-20 rounded overflow-hidden transition-transform hover:-translate-y-0.5"
+                    style={{
+                      background: "#0d0d14",
+                      border: `1px solid ${skill.effect === e ? skill.color : "#2a2a3a"}`,
+                      boxShadow: skill.effect === e ? `0 0 12px ${skill.color}66` : "none",
+                    }}>
+                    <FxBlob preset={e} color={skill.color} intensity={1} playing fxSpeed={skill.fxSpeed ?? 1} />
+                    <div className="absolute bottom-0 inset-x-0 text-[9px] uppercase tracking-wider text-center py-0.5"
+                      style={{ background: "rgba(0,0,0,0.6)" }}>{e}</div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-lg p-4 grid grid-cols-1 sm:grid-cols-2 gap-3" style={subPanelStyle()}>
+              <div>
+                <Label>Effect Color</Label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={skill.color}
+                    onChange={(e) => updateSkill((s) => ({ ...s, color: e.target.value }))}
+                    className="h-10 w-16 bg-[#15151f] rounded border border-[#2a2a3a]" />
+                  <input type="text" value={skill.color}
+                    onChange={(e) => updateSkill((s) => ({ ...s, color: e.target.value }))}
+                    className="flex-1 bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-xs font-mono" />
+                </div>
+              </div>
+              <div>
+                <Label>Sound</Label>
+                <div className="flex items-center gap-2">
+                  <select value={skill.sound}
+                    onChange={(e) => updateSkill((s) => ({ ...s, sound: e.target.value }))}
+                    className="flex-1 bg-[#15151f] border border-[#2a2a3a] rounded px-2 py-1.5 text-sm min-w-0">
+                    {soundNames.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <button title="Preview" className="px-2 py-1.5 text-xs rounded shrink-0"
+                    style={btnStyle("#1c3a2a")}
+                    onClick={() => onPlaySound(skill.sound)}>▶</button>
+                  <button title="Upload sound" className="px-2 py-1.5 text-xs rounded shrink-0"
+                    style={btnStyle("#3a2a1c")}
+                    onClick={() => soundFileRef.current?.click()}>+</button>
+                  <input ref={soundFileRef} type="file" accept="audio/*" className="hidden"
+                    onChange={(e) => e.target.files?.[0] && onSoundFile(e.target.files[0])} />
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === "timeline" && (
+          <div className="flex flex-col gap-4">
+            <section className="rounded-lg p-4" style={subPanelStyle()}>
+              <div className="editor-section-title">Timeline <span className="editor-section-hint">— author keyframes & layers</span></div>
+              <TimelineEditor
+                skill={skill}
+                previewT={previewT}
+                playing={playing}
+                loopPreview={loopPreview}
+                soundNames={soundNames}
+                onPlaySound={onPlaySound}
+                onPlayToggle={onPlayToggle}
+                onLoopToggle={onLoopToggle}
+                onRestart={onRestart}
+                onScrub={onScrub}
+                onChange={(timeline) => updateSkill((s) => ({ ...s, timeline }))}
+              />
+            </section>
+            <PreviewPane skill={skill} t={previewT} />
+          </div>
+        )}
+
+        {tab === "templates" && (
+          <section className="rounded-lg p-4" style={subPanelStyle()}>
+            <div className="editor-section-title">Attack Templates <span className="editor-section-hint">— hover for how it works · click to apply</span></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {ATTACK_TEMPLATES.map((tpl) => (
+                <button key={tpl.name} type="button" title={tpl.blurb}
+                  onClick={() => applyTemplate(tpl)}
+                  className="group relative h-36 overflow-hidden rounded-lg text-left p-3 transition-transform hover:-translate-y-1"
+                  style={{ background: "#0d0d14", border: "1px solid #2a2a3a", boxShadow: "0 6px 18px -8px rgba(0,0,0,0.7)" }}>
+                  <div className="absolute inset-0 opacity-80">
+                    {tpl.preview.map((p, i) => <FxBlob key={p + i} preset={p} color={tpl.color} intensity={0.65 + i * 0.18} playing fxSpeed={tpl.fxSpeed ?? 1} />)}
+                  </div>
+                  <div className="relative z-10 font-bold text-sm tracking-wider">{tpl.name}</div>
+                  <div className="relative z-10 mt-1 text-[10px] opacity-70">{tpl.anim.toUpperCase()} • {tpl.damage} DMG • {tpl.cooldown}s CD</div>
+                  <div className="absolute inset-x-0 bottom-0 translate-y-full group-hover:translate-y-0 transition-transform p-2 text-[10px] leading-snug"
+                    style={{ background: "rgba(0,0,0,0.86)" }}>{tpl.blurb}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------------- Sub components ----------------
+
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] uppercase tracking-widest opacity-60 mb-1">{children}</div>;
 }
