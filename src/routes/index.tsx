@@ -275,6 +275,11 @@ interface Fighter {
   overclockActive?: number;
   // Yuji — Manji Kick aerial
   manjiCd?: number;
+  // Pass C — universal combat meters
+  ult?: number;        // 0..100
+  stamina?: number;    // 0..100
+  parryWindow?: number; // seconds remaining where a landed hit is parried
+  ultReadyPulse?: number;
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash" | "custom";
