@@ -275,6 +275,11 @@ interface Fighter {
   overclockActive?: number;
   // Yuji — Manji Kick aerial
   manjiCd?: number;
+  // Pass C — universal combat meters
+  ult?: number;        // 0..100
+  stamina?: number;    // 0..100
+  parryWindow?: number; // seconds remaining where a landed hit is parried
+  ultReadyPulse?: number;
 }
 interface Projectile {
   uid: number; ownerUid: number; kind: "cotton" | "bullet" | "dismantle" | "clash" | "custom";
@@ -541,6 +546,7 @@ function Game() {
       possessed: false, windupGrow: 0, dots: [],
       stunned: 0, counterActive: 0,
       tauntCd: 1 + Math.random() * 2,
+      ult: 0, stamina: 100, parryWindow: 0, ultReadyPulse: 0,
     });
     playSound(SOUNDS.spawn, 0.5);
     return true;
@@ -888,6 +894,10 @@ function Game() {
       f.decisionCd = Math.max(0, f.decisionCd - dt);
       f.intentTimer = Math.max(0, f.intentTimer - dt);
       f.tauntCd = Math.max(0, f.tauntCd - dt);
+      // Pass C — meters: stamina regens, parry window ticks down, ult-ready pulse decays
+      f.stamina = Math.min(100, (f.stamina ?? 100) + dt * (f.state === "idle" || f.state === "walk" ? 22 : 10));
+      if ((f.parryWindow ?? 0) > 0) f.parryWindow = Math.max(0, (f.parryWindow ?? 0) - dt);
+      if ((f.ultReadyPulse ?? 0) > 0) f.ultReadyPulse = Math.max(0, (f.ultReadyPulse ?? 0) - dt);
       f.sandeActive = Math.max(0, f.sandeActive - dt);
       if (f.customSkillTimer !== undefined) {
         f.customSkillTimer = Math.max(0, f.customSkillTimer - dt);
@@ -1968,8 +1978,6 @@ function Game() {
         if ((target.cursedStacks ?? 0) >= 5) target.cursedFlashReady = true;
       }
     }
-    target.hp -= finalDmg;
-    target.hitFlash = isDot ? 0.15 : 0.25;
     if (!isDot) {
       target.bounce = 0.3;
       target.vx = fromFacing * (crit ? 360 : 260);
@@ -1988,6 +1996,22 @@ function Game() {
       dmg: finalDmg, crit,
     });
     if (!isDot) bigHit(finalDmg);
+
+    // ===== Pass C — Ult meter charging =====
+    // Target gains 0.8 * dmg (getting hit fuels rage). Attacker gains 0.5 * dmg (aggression pays off).
+    const ultGainTarget = finalDmg * 0.8;
+    const prevUltTarget = target.ult ?? 0;
+    target.ult = Math.min(100, prevUltTarget + ultGainTarget);
+    if (prevUltTarget < 100 && target.ult >= 100) target.ultReadyPulse = 0.6;
+    if (attackerUid) {
+      const att4 = fightersRef.current.find((x) => x.uid === attackerUid);
+      if (att4) {
+        const prev = att4.ult ?? 0;
+        att4.ult = Math.min(100, prev + finalDmg * 0.5);
+        if (prev < 100 && att4.ult >= 100) att4.ultReadyPulse = 0.6;
+      }
+    }
+
 
 
 
@@ -2158,6 +2182,7 @@ function Game() {
         possessed: false, windupGrow: 0, dots: [],
         stunned: 0, counterActive: 0,
         tauntCd: 1 + Math.random() * 2,
+        ult: 0, stamina: 100, parryWindow: 0, ultReadyPulse: 0,
       };
     };
     const mod = duelModRef.current;
@@ -2376,6 +2401,35 @@ function Game() {
                     transition: "width 120ms linear",
                   }} />
                 </div>
+                {/* Pass C — Stamina bar (green) */}
+                <div className="mc-bar mt-0.5 relative" style={{ width: 96, height: 3 }}>
+                  <div style={{
+                    width: `${(f.stamina ?? 100)}%`, height: "100%",
+                    background: "linear-gradient(180deg, #6ee27a, #2d8a3d)",
+                    transition: "width 120ms linear",
+                  }} />
+                </div>
+                {/* Pass C — Ult meter (cyan → gold when ready) */}
+                {(() => {
+                  const ult = f.ult ?? 0;
+                  const ready = ult >= 100;
+                  const pulse = (f.ultReadyPulse ?? 0) > 0;
+                  return (
+                    <div className="mc-bar mt-0.5 relative" style={{
+                      width: 96, height: 4,
+                      boxShadow: ready ? "0 0 8px #ffd76a, 0 0 14px #ffb84a" : undefined,
+                      animation: pulse ? "ult-ready 0.6s ease-out" : undefined,
+                    }}>
+                      <div style={{
+                        width: `${ult}%`, height: "100%",
+                        background: ready
+                          ? "linear-gradient(90deg, #ffe27a, #ffb84a, #ff7a3a)"
+                          : "linear-gradient(90deg, #4ec1ff, #7a55d6)",
+                        transition: "width 120ms linear",
+                      }} />
+                    </div>
+                  );
+                })()}
                 {/* Cooldown pips */}
                 {(() => {
                   const slots = possessed
